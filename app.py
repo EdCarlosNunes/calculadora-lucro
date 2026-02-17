@@ -1106,6 +1106,7 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.2f",
                 key="ml_cost",
+                help="Quanto você pagou para comprar ou produzir o produto.",
             )
         with a2:
             extra_cost = st.number_input(
@@ -1115,7 +1116,7 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 step=0.5,
                 format="%.2f",
                 key="ml_extra",
-                help="Embalagem, etiqueta, etc.",
+                help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
             )
 
         b1, b2 = st.columns(2)
@@ -1124,12 +1125,14 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 "Tipo de Anúncio",
                 list(MERCADO_LIVRE["ad_types"].keys()),
                 key="ml_ad_type",
+                help="Clássico tem taxa menor mas menos exposição. Premium tem taxa maior mas parcela sem juros.",
             )
         with b2:
             category = st.selectbox(
                 "Categoria",
                 list(MERCADO_LIVRE["ad_types"][ad_type].keys()),
                 key="ml_category",
+                help="Escolha a categoria correta, pois a comissão do Mercado Livre muda dependendo dela.",
             )
 
         c1, c2 = st.columns(2)
@@ -1141,7 +1144,7 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.2f",
                 key="ml_shipping",
-                help="Custo se oferecer frete grátis (obrigatório se >= R$79)"
+                help="Se o produto for acima de R$79, você paga uma parte do frete. Coloque esse valor aqui."
             )
         with c2:
             tax_pct = st.number_input(
@@ -1152,6 +1155,7 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 step=0.5,
                 format="%.1f",
                 key="ml_tax",
+                help="Imposto que você paga sobre o valor total da venda (ex: DAS do Simples Nacional). Se for MEI, deixe 0.",
             )
             
         st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
@@ -1165,7 +1169,7 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.1f",
                 key="ml_desired_margin",
-                help="Margem de lucro líquido desejada para o cálculo do Preço Sugerido",
+                help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
             )
 
     result_no_fixed = calculate_mercado_livre(
@@ -1213,6 +1217,7 @@ def tab_amazon(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.2f",
                 key="amz_cost",
+                help="Quanto você pagou para comprar ou produzir o produto.",
             )
         with a2:
             extra_cost = st.number_input(
@@ -1222,7 +1227,7 @@ def tab_amazon(fixed: dict, product_name: str):
                 step=0.5,
                 format="%.2f",
                 key="amz_extra",
-                help="Embalagem, etiqueta, etc.",
+                help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
             )
 
         b1, b2 = st.columns(2)
@@ -1231,6 +1236,7 @@ def tab_amazon(fixed: dict, product_name: str):
                 "Logística",
                 list(AMAZON["logistics"].keys()),
                 key="amz_logistics",
+                help="DBA: A Amazon ou parceiro entrega (taxas diferentes). FBM: Você envia pelos Correios/Transportadora.",
             )
             logistics = AMAZON["logistics"][logistics_display]
         with b2:
@@ -1238,6 +1244,7 @@ def tab_amazon(fixed: dict, product_name: str):
                 "Categoria",
                 list(AMAZON["categories"].keys()),
                 key="amz_category",
+                help="A comissão da Amazon varia conforme a categoria do produto.",
             )
 
         # Conditional Inputs
@@ -1253,7 +1260,7 @@ def tab_amazon(fixed: dict, product_name: str):
                     value=300.0,
                     step=50.0,
                     key="amz_weight",
-                    help="Usado para calcular tarifas se preço >= R$79"
+                    help="Peso do produto embalado. No DBA, o peso define a tarifa de envio.",
                 )
         else:
             with c1:
@@ -1264,7 +1271,7 @@ def tab_amazon(fixed: dict, product_name: str):
                     step=1.0,
                     format="%.2f",
                     key="amz_shipping",
-                    help="Custo que você paga para enviar"
+                    help="Quanto você paga nos Correios/Transportadora para enviar o pedido.",
                 )
         
         with c2:
@@ -1276,6 +1283,7 @@ def tab_amazon(fixed: dict, product_name: str):
                 step=0.5,
                 format="%.1f",
                 key="amz_tax",
+                help="Imposto sobre a nota fiscal (ex: Simples Nacional). Se for MEI, deixe 0.",
             )
             
         st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
@@ -1289,7 +1297,7 @@ def tab_amazon(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.1f",
                 key="amz_desired_margin",
-                help="Margem de lucro líquido desejada para o cálculo do Preço Sugerido",
+                help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
             )
 
     result_no_fixed = calculate_amazon(
@@ -1337,6 +1345,7 @@ def tab_shopee(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.2f",
                 key="sp_cost",
+                help="Quanto você pagou para comprar ou produzir o produto.",
             )
         with a2:
             extra_cost = st.number_input(
@@ -1346,7 +1355,7 @@ def tab_shopee(fixed: dict, product_name: str):
                 step=0.5,
                 format="%.2f",
                 key="sp_extra",
-                help="Embalagem, etiqueta, etc.",
+                help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
             )
 
         b1, b2 = st.columns(2)
@@ -1355,6 +1364,7 @@ def tab_shopee(fixed: dict, product_name: str):
                 "Categoria",
                 list(SHOPEE["categories"].keys()),
                 key="sp_category",
+                help="Escolha a categoria para o cálculo das taxas.",
             )
         with b2:
             seller_type = st.radio(
@@ -1362,13 +1372,14 @@ def tab_shopee(fixed: dict, product_name: str):
                 ["CPF", "CNPJ"],
                 horizontal=True,
                 key="sp_seller",
+                help="Taxa extra de R$3 se for CPF e vender mais de R$900/mês (estimado).",
             )
 
         free_shipping = st.checkbox(
             "Programa Frete Grátis (+6%)",
             value=True, # Default to true as it's very common
             key="sp_free_ship",
-            help="Participa do programa Frete Grátis da Shopee?",
+            help="Marque se você participa do programa de Frete Grátis Extra (cobra comissão maior).",
         )
 
         c1, c2 = st.columns(2)
@@ -1380,7 +1391,7 @@ def tab_shopee(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.2f",
                 key="sp_shipping",
-                help="Pago pelo vendedor se oferecer frete grátis"
+                help="Coloque aqui se você paga alguma parte do frete para a Shopee."
             )
         with c2:
             tax_pct = st.number_input(
@@ -1391,6 +1402,7 @@ def tab_shopee(fixed: dict, product_name: str):
                 step=0.5,
                 format="%.1f",
                 key="sp_tax",
+                help="Imposto sobre a nota fiscal (ex: Simples Nacional). Se for MEI, deixe 0.",
             )
             
         st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
@@ -1404,7 +1416,7 @@ def tab_shopee(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.1f",
                 key="sp_desired_margin",
-                help="Margem de lucro líquido desejada para o cálculo do Preço Sugerido",
+                help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
             )
 
     result_no_fixed = calculate_shopee(
@@ -1533,7 +1545,11 @@ def main():
     # Global Inputs
     with st.container():
         st.markdown('<div class="glass-container">', unsafe_allow_html=True)
-        product_name = st.text_input("📦 Nome do Produto / SKU (Opcional)", placeholder="Ex: Fone Bluetooth XYZ", help="Identificador para salvar na lista.")
+        product_name = st.text_input(
+            "📦 Nome do Produto / SKU (Opcional)", 
+            placeholder="Ex: Fone Bluetooth XYZ", 
+            help="Nome para você identificar este cálculo depois na lista de simulações salvas."
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Fixed expenses section (shared across all tabs)
@@ -1585,3 +1601,128 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def render_fixed_expenses() -> dict:
+    """Render optional fixed monthly expenses section and return values."""
+    with st.expander("💼 Despesas Fixas Mensais (opcional)", expanded=False):
+        st.markdown(
+            """
+            <div style="font-size:13px; color:#a1a1aa; margin-bottom:12px;">
+                Informe seus gastos fixos mensais. Eles serão rateados por unidade vendida
+                nas projeções com despesas fixas.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            mei = st.number_input(
+                "MEI (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="mei",
+                help="Valor fixo que você paga todo mês do seu MEI (DAS).",
+            )
+        with fc2:
+            platform = st.number_input(
+                "Plataforma / NF-e (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="platform",
+                help="Mensalidade de sistemas como Bling, Tiny ou Hub de integração.",
+            )
+        with fc3:
+            supplier = st.number_input(
+                "Assinatura Fornecedor (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="supplier",
+                help="Se você paga alguma assinatura mensal para ter acesso a fornecedores.",
+            )
+
+        fc4, fc5, _ = st.columns(3)
+        with fc4:
+            other_fixed = st.number_input(
+                "Outros Custos Fixos (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="other_fixed",
+                help="Soma de outras contas fixas: Internet, Luz, Aluguel, Contador, etc.",
+            )
+        with fc5:
+            estimated_sales = st.number_input(
+                "Vendas estimadas/mês (para rateio)",
+                min_value=1,
+                value=30,
+                step=5,
+                key="estimated_sales",
+                help="Quantas vendas você acha que vai fazer no mês? Usamos isso para dividir os custos fixos por cada produto.",
+            )
+            
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style="font-size:13px; color:#a1a1aa; margin-bottom:12px;">
+                <b>Taxas e Custos Operacionais (% sobre a venda)</b><br>
+                Valores percentuais que incidem sobre o preço de venda ou custos variáveis.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        
+        op1, op2, op3 = st.columns(3)
+        with op1:
+            marketing_pct = st.number_input(
+                "Marketing / Ads (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.5,
+                format="%.1f",
+                key="marketing_pct",
+                help="Porcentagem que você gasta com anúncios (Ads) para fazer uma venda.",
+            )
+        with op2:
+            antecipation_pct = st.number_input(
+                "Antecipação / Financeiro (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+                key="antecipation_pct",
+                help="Taxa que o banco ou plataforma cobra se você quiser receber o dinheiro antes do prazo.",
+            )
+        with op3:
+            losses_pct = st.number_input(
+                "Perdas / Devoluções (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+                key="losses_pct",
+                help="Reserva para cobrir prejuízos com devoluções ou produtos danificados.",
+            )
+            
+        op4, _, _ = st.columns(3)
+        with op4:
+            other_taxes_pct = st.number_input(
+                "Outros Impostos (DIFAL/ST) (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+                key="other_taxes_pct",
+                help="Impostos extras além do Simples Nacional, como DIFAL ou Substituição Tributária.",
+            )
