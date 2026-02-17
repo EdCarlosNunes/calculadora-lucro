@@ -76,9 +76,28 @@ MERCADO_LIVRE = {
 AMAZON = {
     "name": "Amazon",
     "icon": "📦",
-    "plans": {
-        "Individual (R$2/item)": 2.0,
-        "Profissional (R$19/mês)": 0.0,
+    "logistics": {
+        "FBM (Vendedor envia)": "fbm",
+        "DBA (Amazon envia)": "dba",
+    },
+    "dba_fees": {
+        "fixed": [ # For price < 79.00
+            (30.00, 4.50),
+            (49.99, 6.50),
+            (78.99, 6.75),
+        ],
+        "weight": [ # For price >= 79.00 (Standard size examples - SP Capital base)
+            (250, 19.95),
+            (500, 20.45),
+            (1000, 21.45),
+            (2000, 22.45),
+            (5000, 23.45),
+            (9000, 25.45),
+            (13000, 28.45),
+            (17000, 31.45),
+            (23000, 35.45),
+            (30000, 39.45), # Cap at 30kg for simplicity in example
+        ]
     },
     "categories": {
         "Automotivo": 12.0,
@@ -144,82 +163,168 @@ def calc_ml_fixed_fee(sale_price: float) -> float:
 
 def calculate_mercado_livre(
     cost: float,
-    sale_price: float,
     ad_type: str,
     category: str,
     extra_cost: float,
-    shipping: float,
+    shipping_cost: float, # Cost if Free Shipping applies (>= 79)
     tax_pct: float,
     fixed_expenses_per_unit: float,
     desired_margin_pct: float,
     other_pct: float,
 ) -> dict:
     commission_pct = MERCADO_LIVRE["ad_types"][ad_type][category]
-    commission = sale_price * (commission_pct / 100)
-    fixed_fee = calc_ml_fixed_fee(sale_price)
-    tax = sale_price * (tax_pct / 100)
-    other_costs = sale_price * (other_pct / 100)
     
-    total_fees = commission + fixed_fee + other_costs
-    total_cost = cost + total_fees + extra_cost + shipping + tax + fixed_expenses_per_unit
-    profit = sale_price - total_cost
-    you_receive = sale_price - total_fees - tax
-    margin = (profit / sale_price * 100) if sale_price > 0 else 0
-    roi = (profit / cost * 100) if cost > 0 else 0
+    def get_fixed_fee(p):
+        if p >= 79.00: return 0.0
+        for threshold, fee in MERCADO_LIVRE["fixed_fees"]:
+            if p <= threshold: return fee
+        return 0.0
+
+    tax_factor = tax_pct / 100
+    commission_factor = commission_pct / 100
+    other_factor = other_pct / 100
+    margin_factor = desired_margin_pct / 100
     
-    divisor = (1 - (commission_pct + tax_pct + desired_margin_pct + other_pct) / 100)
-    if divisor <= 0:
-        suggested_price = 0.0
-    else:
-        suggested_price = (cost + extra_cost + shipping + fixed_expenses_per_unit) / divisor
-        if suggested_price < 79.0:
-             suggested_price = (cost + extra_cost + shipping + fixed_expenses_per_unit + 6.50) / divisor
-            
+    divisor = 1 - (commission_factor + tax_factor + margin_factor + other_factor)
+    
+    suggested_price = 0.0
+    
+    if divisor > 0.01:
+        # Regime 1: Price < 79. Check tiers.
+        # Tier 1: <= 29. Fee 6.25. No Shipping.
+        p1 = (cost + extra_cost + fixed_expenses_per_unit + 6.25) / divisor
+        if p1 <= 29.00:
+            suggested_price = p1
+        else:
+            # Tier 2: 29 < p <= 50. Fee 6.50.
+            p2 = (cost + extra_cost + fixed_expenses_per_unit + 6.50) / divisor
+            if p2 <= 50.00:
+                suggested_price = p2
+            else:
+                # Tier 3: 50 < p < 79. Fee 6.75.
+                p3 = (cost + extra_cost + fixed_expenses_per_unit + 6.75) / divisor
+                if p3 < 79.00:
+                    suggested_price = p3
+                else:
+                    # Regime 2: >= 79. No Fixed Fee. YES Shipping deduction.
+                    p4 = (cost + extra_cost + fixed_expenses_per_unit + shipping_cost) / divisor
+                    suggested_price = max(79.00, p4)
+                    
+    final_price = round(suggested_price, 2)
+    
+    # Recalculate actuals
+    real_fixed_fee = get_fixed_fee(final_price)
+    real_shipping = shipping_cost if final_price >= 79.00 else 0.0
+    
+    commission = final_price * commission_factor
+    tax = final_price * tax_factor
+    other = final_price * other_factor
+    
+    total_fees = commission + real_fixed_fee + other
+    
+    # Total Cost = Product + Extra + FixedExp + Shipping + Fees + Tax
+    total_cost = cost + extra_cost + fixed_expenses_per_unit + real_shipping + total_fees + tax
+    profit = final_price - total_cost
+    
+    margin = (profit / final_price * 100) if final_price > 0 else 0
+    roi_base = cost + extra_cost + real_shipping + fixed_expenses_per_unit
+    roi = (profit / roi_base * 100) if roi_base > 0 else 0
+
     return {
         "profit": profit,
         "margin": margin,
         "roi": roi,
-        "total_fees": total_fees + tax, # Including tax in total fees display often helpful, but let's keep consistent
+        "total_fees": total_fees + tax,
         "commission": commission,
         "commission_pct": commission_pct,
-        "fixed_fee": fixed_fee,
+        "fixed_fee": real_fixed_fee,
+        "shipping_cost": real_shipping, # Add this for specific display if needed
         "tax": tax,
-        "you_receive": you_receive,
-        "suggested_price": round(suggested_price, 2),
+        "you_receive": final_price - total_fees - tax - real_shipping,
+        "suggested_price": final_price,
         "total_cost": total_cost,
     }
 
 
 def calculate_amazon(
     cost: float,
-    sale_price: float,
-    plan: str,
+    logistics: str, # "dba" or "fbm"
     category: str,
     extra_cost: float,
-    shipping: float,
+    shipping_cost: float,
+    weight_g: float,
     tax_pct: float,
     fixed_expenses_per_unit: float,
     desired_margin_pct: float,
     other_pct: float,
 ) -> dict:
     commission_pct = AMAZON["categories"][category]
-    commission = sale_price * (commission_pct / 100)
-    plan_fee = AMAZON["plans"][plan]
-    tax = sale_price * (tax_pct / 100)
-    other_costs = sale_price * (other_pct / 100)
 
-    total_fees = commission + plan_fee + other_costs
-    total_cost = cost + total_fees + extra_cost + shipping + tax + fixed_expenses_per_unit
-    profit = sale_price - total_cost
-    you_receive = sale_price - total_fees - tax
-    margin = (profit / sale_price * 100) if sale_price > 0 else 0
-    roi = (profit / cost * 100) if cost > 0 else 0
+    def get_dba_fee(price, weight):
+        if price < 79.00:
+            if price <= 30.00: return AMAZON["dba_fees"]["fixed"][0][1]
+            if price <= 49.99: return AMAZON["dba_fees"]["fixed"][1][1]
+            return AMAZON["dba_fees"]["fixed"][2][1]
+        else:
+            for w, fee in AMAZON["dba_fees"]["weight"]:
+                if weight <= w: return fee
+            return AMAZON["dba_fees"]["weight"][-1][1]
+
+    suggested_price = 0.0
+    tax_factor = tax_pct / 100
+    commission_factor = commission_pct / 100
+    other_factor = other_pct / 100
+    margin_factor = desired_margin_pct / 100
     
-    divisor = (1 - (commission_pct + tax_pct + desired_margin_pct + other_pct) / 100)
-    if divisor <= 0:
+    divisor = 1 - (commission_factor + tax_factor + margin_factor + other_factor)
+    
+    if divisor <= 0.01:
         suggested_price = 0.0
     else:
-        suggested_price = (cost + extra_cost + shipping + plan_fee + fixed_expenses_per_unit) / divisor
+        if logistics == "dba":
+            # Iterative check for tiers
+            p_check = (cost + extra_cost + fixed_expenses_per_unit + 4.50) / divisor
+            if p_check <= 30.00:
+                suggested_price = p_check
+            else:
+                p_check = (cost + extra_cost + fixed_expenses_per_unit + 6.50) / divisor
+                if p_check <= 49.99:
+                    suggested_price = p_check
+                else:
+                    p_check = (cost + extra_cost + fixed_expenses_per_unit + 6.75) / divisor
+                    if p_check < 79.00:
+                        suggested_price = p_check
+                    else:
+                        w_fee = 0.0
+                        for w, fee in AMAZON["dba_fees"]["weight"]:
+                            if weight_g <= w: 
+                                w_fee = fee
+                                break
+                        else:
+                            w_fee = AMAZON["dba_fees"]["weight"][-1][1]
+                        suggested_price = max(79.00, (cost + extra_cost + fixed_expenses_per_unit + w_fee) / divisor)
+        else:
+            suggested_price = (cost + extra_cost + fixed_expenses_per_unit + shipping_cost) / divisor
+
+    final_price = round(suggested_price, 2)
+    
+    logistics_fee = 0.0
+    if logistics == "dba":
+        logistics_fee = get_dba_fee(final_price, weight_g)
+
+    commission = final_price * commission_factor
+    tax = final_price * tax_factor
+    other = final_price * other_factor
+    
+    total_fees = commission + logistics_fee + other
+    fbm_cost = shipping_cost if logistics == "fbm" else 0.0
+    
+    # Revenue - Expenses
+    profit = final_price - (cost + extra_cost + fixed_expenses_per_unit + fbm_cost + total_fees + tax)
+    
+    margin = (profit / final_price * 100) if final_price > 0 else 0
+    roi_base = cost + extra_cost + fbm_cost
+    roi = (profit / roi_base * 100) if roi_base > 0 else 0
 
     return {
         "profit": profit,
@@ -228,53 +333,76 @@ def calculate_amazon(
         "total_fees": total_fees + tax,
         "commission": commission,
         "commission_pct": commission_pct,
-        "plan_fee": plan_fee,
+        "plan_fee": logistics_fee,
         "tax": tax,
-        "you_receive": you_receive,
-        "suggested_price": round(suggested_price, 2),
-        "total_cost": total_cost,
+        "you_receive": final_price - total_fees - tax,
+        "suggested_price": final_price,
+        "total_cost": roi_base + total_fees + tax + fixed_expenses_per_unit, 
     }
 
 
 def calculate_shopee(
     cost: float,
-    sale_price: float,
     category: str,
     seller_type: str,
     free_shipping: bool,
     extra_cost: float,
-    shipping: float,
+    shipping_cost: float,
     tax_pct: float,
     fixed_expenses_per_unit: float,
     desired_margin_pct: float,
     other_pct: float,
 ) -> dict:
-    commission_pct = SHOPEE["categories"][category]
+    commission_pct = SHOPEE["categories"][category] # Base commission
+    
     if free_shipping:
-        commission_pct += SHOPEE["free_shipping_extra"]
-    commission = sale_price * (commission_pct / 100)
-    fixed_fee = SHOPEE["fixed_fee"]
+        commission_pct += 6.0 # Add 6% for free shipping program
+        
+    # Iterative Price Calc
+    tax_factor = tax_pct / 100
+    commission_factor = commission_pct / 100
+    other_factor = other_pct / 100
+    margin_factor = desired_margin_pct / 100
     
-    transaction_fee_pct = SHOPEE["cnpj_transaction_fee"] if seller_type == "CNPJ" else 0
-    transaction_fee = sale_price * (transaction_fee_pct / 100)
+    # Try Standard Fee (4.00)
+    divisor_std = 1 - (commission_factor + tax_factor + margin_factor + other_factor)
+    suggested_price = 0.0
     
-    tax = sale_price * (tax_pct / 100)
-    other_costs = sale_price * (other_pct / 100)
-
-    total_fees = commission + fixed_fee + transaction_fee + other_costs
-    total_cost = cost + total_fees + extra_cost + shipping + tax + fixed_expenses_per_unit
-    profit = sale_price - total_cost
-    you_receive = sale_price - total_fees - tax
-    margin = (profit / sale_price * 100) if sale_price > 0 else 0
-    roi = (profit / cost * 100) if cost > 0 else 0
+    if divisor_std > 0.01:
+        p_std = (cost + extra_cost + shipping_cost + fixed_expenses_per_unit + 4.00) / divisor_std
+        if p_std >= 8.00:
+            suggested_price = p_std
+        else:
+            # Try Small Item Fee (50% of Price)
+            # Price = (Costs) / (1 - VarFees - 0.5)
+            # VarFees includes Commission!
+            # Example: 14% comm + 50% fixed = 64% fees
+            divisor_small = 1 - (commission_factor + tax_factor + margin_factor + other_factor + 0.5)
+            if divisor_small > 0.01:
+                p_small = (cost + extra_cost + shipping_cost + fixed_expenses_per_unit) / divisor_small
+                suggested_price = p_small
+            else:
+                suggested_price = 0.0 
     
-    total_fee_pct = commission_pct + transaction_fee_pct
-    divisor = (1 - (total_fee_pct + tax_pct + desired_margin_pct + other_pct) / 100)
+    final_price = round(suggested_price, 2)
     
-    if divisor <= 0:
-        suggested_price = 0.0
+    # Metrics
+    if final_price > 0 and final_price < 8.00:
+        real_fixed_fee = final_price * 0.5
     else:
-        suggested_price = (cost + extra_cost + shipping + fixed_fee + fixed_expenses_per_unit) / divisor
+        real_fixed_fee = 4.00
+        
+    commission = final_price * commission_factor
+    tax = final_price * tax_factor
+    other = final_price * other_factor
+    
+    total_fees = commission + real_fixed_fee + other
+    total_cost = cost + extra_cost + shipping_cost + fixed_expenses_per_unit + total_fees + tax
+    profit = final_price - total_cost
+    
+    margin = (profit / final_price * 100) if final_price > 0 else 0
+    roi_base = cost + extra_cost + shipping_cost + fixed_expenses_per_unit
+    roi = (profit / roi_base * 100) if roi_base > 0 else 0
 
     return {
         "profit": profit,
@@ -283,18 +411,13 @@ def calculate_shopee(
         "total_fees": total_fees + tax,
         "commission": commission,
         "commission_pct": commission_pct,
-        "fixed_fee": fixed_fee,
-        "transaction_fee": transaction_fee,
+        "fixed_fee": real_fixed_fee,
         "tax": tax,
-        "you_receive": you_receive,
-        "suggested_price": round(suggested_price, 2),
+        "you_receive": final_price - total_fees - tax,
+        "suggested_price": final_price,
         "total_cost": total_cost,
     }
 
-
-# ─────────────────────────────────────────────────────────────
-# TAB UPDATES
-# ─────────────────────────────────────────────────────────────
 
 def tab_mercado_livre(fixed: dict):
     # ... (Same UI code) ...
@@ -975,13 +1098,14 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 key="ml_cost",
             )
         with a2:
-            sale_price = st.number_input(
-                "Preço de Venda (R$)",
+            extra_cost = st.number_input(
+                "Custo Extra (R$)",
                 min_value=0.0,
-                value=120.0,
-                step=1.0,
+                value=0.0,
+                step=0.5,
                 format="%.2f",
-                key="ml_sale",
+                key="ml_extra",
+                help="Embalagem, etiqueta, etc.",
             )
 
         b1, b2 = st.columns(2)
@@ -998,32 +1122,23 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 key="ml_category",
             )
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
-            extra_cost = st.number_input(
-                "Custo Extra (R$)",
-                min_value=0.0,
-                value=0.0,
-                step=0.5,
-                format="%.2f",
-                key="ml_extra",
-                help="Embalagem, etiqueta, etc.",
-            )
-        with c2:
             shipping = st.number_input(
                 "Frete do Vendedor (R$)",
                 min_value=0.0,
-                value=0.0,
+                value=20.0,
                 step=1.0,
                 format="%.2f",
                 key="ml_shipping",
+                help="Custo se oferecer frete grátis (obrigatório se >= R$79)"
             )
-        with c3:
+        with c2:
             tax_pct = st.number_input(
                 "Imposto (%)",
                 min_value=0.0,
                 max_value=100.0,
-                value=0.0,
+                value=4.0,
                 step=0.5,
                 format="%.1f",
                 key="ml_tax",
@@ -1044,13 +1159,13 @@ def tab_mercado_livre(fixed: dict, product_name: str):
             )
 
     result_no_fixed = calculate_mercado_livre(
-        cost, sale_price, ad_type, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
+        cost, ad_type, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
     )
 
     result_with_fixed = None
     if fixed["has_expenses"]:
         result_with_fixed = calculate_mercado_livre(
-            cost, sale_price, ad_type, category, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
+            cost, ad_type, category, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
         )
 
     with col2:
@@ -1090,31 +1205,6 @@ def tab_amazon(fixed: dict, product_name: str):
                 key="amz_cost",
             )
         with a2:
-            sale_price = st.number_input(
-                "Preço de Venda (R$)",
-                min_value=0.0,
-                value=120.0,
-                step=1.0,
-                format="%.2f",
-                key="amz_sale",
-            )
-
-        b1, b2 = st.columns(2)
-        with b1:
-            plan = st.selectbox(
-                "Plano de Venda",
-                list(AMAZON["plans"].keys()),
-                key="amz_plan",
-            )
-        with b2:
-            category = st.selectbox(
-                "Categoria",
-                list(AMAZON["categories"].keys()),
-                key="amz_category",
-            )
-
-        c1, c2, c3 = st.columns(3)
-        with c1:
             extra_cost = st.number_input(
                 "Custo Extra (R$)",
                 min_value=0.0,
@@ -1124,26 +1214,60 @@ def tab_amazon(fixed: dict, product_name: str):
                 key="amz_extra",
                 help="Embalagem, etiqueta, etc.",
             )
-        with c2:
-            shipping = st.number_input(
-                "Frete do Vendedor (R$)",
-                min_value=0.0,
-                value=0.0,
-                step=1.0,
-                format="%.2f",
-                key="amz_shipping",
+
+        b1, b2 = st.columns(2)
+        with b1:
+            logistics_display = st.selectbox(
+                "Logística",
+                list(AMAZON["logistics"].keys()),
+                key="amz_logistics",
             )
-        with c3:
+            logistics = AMAZON["logistics"][logistics_display]
+        with b2:
+            category = st.selectbox(
+                "Categoria",
+                list(AMAZON["categories"].keys()),
+                key="amz_category",
+            )
+
+        # Conditional Inputs
+        c1, c2 = st.columns(2)
+        weight_g = 0.0
+        shipping_cost = 0.0
+        
+        if logistics == "dba":
+            with c1:
+                weight_g = st.number_input(
+                    "Peso (gramas)",
+                    min_value=0.0,
+                    value=300.0,
+                    step=50.0,
+                    key="amz_weight",
+                    help="Usado para calcular tarifas se preço >= R$79"
+                )
+        else:
+            with c1:
+                shipping_cost = st.number_input(
+                    "Frete do Vendedor (R$)",
+                    min_value=0.0,
+                    value=20.0,
+                    step=1.0,
+                    format="%.2f",
+                    key="amz_shipping",
+                    help="Custo que você paga para enviar"
+                )
+        
+        with c2:
             tax_pct = st.number_input(
                 "Imposto (%)",
                 min_value=0.0,
                 max_value=100.0,
-                value=0.0,
+                value=4.0, 
                 step=0.5,
                 format="%.1f",
                 key="amz_tax",
             )
-        
+            
         st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
         d1, _ = st.columns([1, 1])
         with d1:
@@ -1159,13 +1283,13 @@ def tab_amazon(fixed: dict, product_name: str):
             )
 
     result_no_fixed = calculate_amazon(
-        cost, sale_price, plan, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
+        cost, logistics, category, extra_cost, shipping_cost, weight_g, tax_pct, 0.0, desired_margin, 0.0
     )
 
     result_with_fixed = None
     if fixed["has_expenses"]:
         result_with_fixed = calculate_amazon(
-            cost, sale_price, plan, category, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
+            cost, logistics, category, extra_cost, shipping_cost, weight_g, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
         )
 
     with col2:
@@ -1205,13 +1329,14 @@ def tab_shopee(fixed: dict, product_name: str):
                 key="sp_cost",
             )
         with a2:
-            sale_price = st.number_input(
-                "Preço de Venda (R$)",
+            extra_cost = st.number_input(
+                "Custo Extra (R$)",
                 min_value=0.0,
-                value=120.0,
-                step=1.0,
+                value=0.0,
+                step=0.5,
                 format="%.2f",
-                key="sp_sale",
+                key="sp_extra",
+                help="Embalagem, etiqueta, etc.",
             )
 
         b1, b2 = st.columns(2)
@@ -1231,23 +1356,13 @@ def tab_shopee(fixed: dict, product_name: str):
 
         free_shipping = st.checkbox(
             "Programa Frete Grátis (+6%)",
-            value=False,
+            value=True, # Default to true as it's very common
             key="sp_free_ship",
             help="Participa do programa Frete Grátis da Shopee?",
         )
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
-            extra_cost = st.number_input(
-                "Custo Extra (R$)",
-                min_value=0.0,
-                value=0.0,
-                step=0.5,
-                format="%.2f",
-                key="sp_extra",
-                help="Embalagem, etiqueta, etc.",
-            )
-        with c2:
             shipping = st.number_input(
                 "Frete do Vendedor (R$)",
                 min_value=0.0,
@@ -1255,13 +1370,14 @@ def tab_shopee(fixed: dict, product_name: str):
                 step=1.0,
                 format="%.2f",
                 key="sp_shipping",
+                help="Pago pelo vendedor se oferecer frete grátis"
             )
-        with c3:
+        with c2:
             tax_pct = st.number_input(
                 "Imposto (%)",
                 min_value=0.0,
                 max_value=100.0,
-                value=0.0,
+                value=4.0,
                 step=0.5,
                 format="%.1f",
                 key="sp_tax",
@@ -1282,13 +1398,13 @@ def tab_shopee(fixed: dict, product_name: str):
             )
 
     result_no_fixed = calculate_shopee(
-        cost, sale_price, category, seller_type, free_shipping, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
+        cost, category, seller_type, free_shipping, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
     )
 
     result_with_fixed = None
     if fixed["has_expenses"]:
         result_with_fixed = calculate_shopee(
-            cost, sale_price, category, seller_type, free_shipping, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
+            cost, category, seller_type, free_shipping, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
         )
 
     with col2:
