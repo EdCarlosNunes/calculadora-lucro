@@ -853,12 +853,12 @@ def inject_css():
 def render_result_card(label: str, value: str, color_class: str, sub: str = "") -> str:
     sub_html = f'<div class="result-sub">{sub}</div>' if sub else ""
     return f"""
-        <div class="result-card">
-            <div class="result-label">{label}</div>
-            <div class="result-value {color_class}">{value}</div>
-            {sub_html}
-        </div>
-    """
+<div class="result-card">
+    <div class="result-label">{label}</div>
+    <div class="result-value {color_class}">{value}</div>
+    {sub_html}
+</div>
+"""
 
 
 def render_results(result: dict, title: str = "📊 Resultados por Venda"):
