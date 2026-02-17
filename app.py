@@ -768,35 +768,49 @@ def inject_css():
         }
 
         /* ── Custom result cards ──────────────── */
+        .results-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
         .result-card {
             background: var(--glass-bg);
             backdrop-filter: var(--glass-blur);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-lg);
-            padding: 24px;
+            padding: 20px;
             box-shadow: var(--glass-shadow);
             text-align: center;
             transition: transform 0.3s ease;
+            flex: 1 1 160px; /* Grow, Shrink, Basis */
+            min-width: 160px; /* Force minimum width */
+            max-width: 100%; /* Allow full width on mobile if needed */
         }
 
         .result-card:hover {
             transform: scale(1.02);
+            z-index: 2;
         }
 
         .result-label {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.04em;
             margin-bottom: 8px;
+            white-space: nowrap; /* Prevent label wrapping too */
         }
 
         .result-value {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 700;
             letter-spacing: -0.01em;
             color: var(--text-primary);
+            white-space: nowrap; /* CRITICAL: Prevent value wrapping */
         }
         
         .result-sub {
@@ -836,18 +850,15 @@ def inject_css():
 # ─────────────────────────────────────────────────────────────
 # UI COMPONENTS
 # ─────────────────────────────────────────────────────────────
-def render_result_card(label: str, value: str, color_class: str, sub: str = ""):
+def render_result_card(label: str, value: str, color_class: str, sub: str = "") -> str:
     sub_html = f'<div class="result-sub">{sub}</div>' if sub else ""
-    st.markdown(
-        f"""
+    return f"""
         <div class="result-card">
             <div class="result-label">{label}</div>
             <div class="result-value {color_class}">{value}</div>
             {sub_html}
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """
 
 
 def render_results(result: dict, title: str = "📊 Resultados por Venda"):
@@ -857,41 +868,40 @@ def render_results(result: dict, title: str = "📊 Resultados por Venda"):
 
     st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        render_result_card(
-            "Lucro Líquido",
-            f"R$ {profit:,.2f}",
-            color,
-            "por venda",
-        )
-    with c2:
-        render_result_card(
-            "Preço Sugerido",
-            f"R$ {result['suggested_price']:,.2f}",
-            "neutral",
-            "baseado na margem",
-        )
-    with c3:
-        render_result_card(
-            "Margem Líquida",
-            f"{result['margin']:.1f}%",
-            color,
-        )
-    with c4:
-        render_result_card(
-            "Tarifas Totais",
-            f"R$ {result['total_fees']:,.2f}",
-            "orange",
-            f"{result['commission_pct']:.0f}% comissão",
-        )
-    with c5:
-        render_result_card(
-            "Você Recebe",
-            f"R$ {result['you_receive']:,.2f}",
-            "yellow",
-            "após tarifas",
-        )
+    # Accumulate HTML for cards
+    cards_html = ""
+    cards_html += render_result_card(
+        "Lucro Líquido",
+        f"R$ {profit:,.2f}",
+        color,
+        "por venda",
+    )
+    cards_html += render_result_card(
+        "Preço Sugerido",
+        f"R$ {result['suggested_price']:,.2f}",
+        "neutral",
+        "baseado na margem",
+    )
+    cards_html += render_result_card(
+        "Margem Líquida",
+        f"{result['margin']:.1f}%",
+        color,
+    )
+    cards_html += render_result_card(
+        "Tarifas Totais",
+        f"R$ {result['total_fees']:,.2f}",
+        "orange",
+        f"{result['commission_pct']:.0f}% comissão",
+    )
+    cards_html += render_result_card(
+        "Você Recebe",
+        f"R$ {result['you_receive']:,.2f}",
+        "yellow",
+        "após tarifas",
+    )
+
+    # Render container
+    st.markdown(f'<div class="results-container">{cards_html}</div>', unsafe_allow_html=True)
 
 
 def render_charts(
