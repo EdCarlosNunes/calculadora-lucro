@@ -1,0 +1,1461 @@
+import math
+import streamlit as st
+import plotly.graph_objects as go
+import pandas as pd
+import time
+
+# ─────────────────────────────────────────────────────────────
+# PAGE CONFIG
+# ─────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Calculadora de Lucro | Marketplace",
+    page_icon="💰",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+if "saved_simulations" not in st.session_state:
+    st.session_state["saved_simulations"] = []
+
+
+# ─────────────────────────────────────────────────────────────
+# MARKETPLACE FEE DATA
+# ─────────────────────────────────────────────────────────────
+MERCADO_LIVRE = {
+    "name": "Mercado Livre",
+    "icon": "🟡",
+    "ad_types": {
+        "Clássico": {
+            "Acessórios para Veículos": 13.0,
+            "Alimentos e Bebidas": 12.0,
+            "Bebês": 14.0,
+            "Beleza e Cuidado Pessoal": 14.0,
+            "Brinquedos e Hobbies": 14.0,
+            "Calçados, Roupas e Bolsas": 14.0,
+            "Casa, Móveis e Decoração": 13.0,
+            "Celulares e Telefones": 12.0,
+            "Eletrodomésticos": 11.0,
+            "Eletrônicos, Áudio e Vídeo": 12.0,
+            "Esportes e Fitness": 14.0,
+            "Ferramentas": 12.0,
+            "Games": 12.0,
+            "Informática": 12.0,
+            "Instrumentos Musicais": 12.0,
+            "Livros, Revistas e Comics": 16.0,
+            "Saúde": 14.0,
+            "Outros": 13.0,
+        },
+        "Premium": {
+            "Acessórios para Veículos": 18.0,
+            "Alimentos e Bebidas": 17.0,
+            "Bebês": 18.0,
+            "Beleza e Cuidado Pessoal": 18.0,
+            "Brinquedos e Hobbies": 18.0,
+            "Calçados, Roupas e Bolsas": 18.0,
+            "Casa, Móveis e Decoração": 18.0,
+            "Celulares e Telefones": 16.0,
+            "Eletrodomésticos": 16.0,
+            "Eletrônicos, Áudio e Vídeo": 16.0,
+            "Esportes e Fitness": 18.0,
+            "Ferramentas": 17.0,
+            "Games": 17.0,
+            "Informática": 16.0,
+            "Instrumentos Musicais": 17.0,
+            "Livros, Revistas e Comics": 19.0,
+            "Saúde": 18.0,
+            "Outros": 17.0,
+        },
+    },
+    "fixed_fees": [
+        (29.0, 6.25),
+        (50.0, 6.50),
+        (79.0, 6.75),
+    ],
+}
+
+AMAZON = {
+    "name": "Amazon",
+    "icon": "📦",
+    "plans": {
+        "Individual (R$2/item)": 2.0,
+        "Profissional (R$19/mês)": 0.0,
+    },
+    "categories": {
+        "Automotivo": 12.0,
+        "Bebês": 12.0,
+        "Beleza": 12.0,
+        "Brinquedos e Jogos": 15.0,
+        "Casa": 13.0,
+        "Computadores": 10.0,
+        "Cozinha": 13.0,
+        "Eletrônicos": 10.0,
+        "Esportes e Aventura": 12.0,
+        "Ferramentas e Construção": 12.0,
+        "Games e Consoles": 12.0,
+        "Instrumentos Musicais": 12.0,
+        "Livros": 15.0,
+        "Moda": 13.0,
+        "Pet Shop": 12.0,
+        "Papelaria e Escritório": 12.0,
+        "Saúde": 10.0,
+        "Outros": 12.0,
+    },
+}
+
+SHOPEE = {
+    "name": "Shopee",
+    "icon": "🟠",
+    "base_commission": 14.0,
+    "free_shipping_extra": 6.0,
+    "fixed_fee": 4.0,
+    "cnpj_transaction_fee": 2.0,
+    "categories": {
+        "Acessórios de Moda": 14.0,
+        "Beleza e Saúde": 14.0,
+        "Brinquedos": 14.0,
+        "Casa e Decoração": 14.0,
+        "Celulares e Acessórios": 14.0,
+        "Eletrônicos": 14.0,
+        "Esportes e Lazer": 14.0,
+        "Ferramentas": 14.0,
+        "Informática": 14.0,
+        "Livros": 14.0,
+        "Moda Feminina": 14.0,
+        "Moda Masculina": 14.0,
+        "Pet Shop": 14.0,
+        "Bebês e Crianças": 14.0,
+        "Outros": 14.0,
+    },
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# CALCULATION ENGINE
+# ─────────────────────────────────────────────────────────────
+def calc_ml_fixed_fee(sale_price: float) -> float:
+    """Calculate Mercado Livre fixed fee based on price range."""
+    if sale_price >= 79.0:
+        return 0.0
+    for threshold, fee in MERCADO_LIVRE["fixed_fees"]:
+        if sale_price <= threshold:
+            return fee
+    return 0.0
+
+
+def calculate_mercado_livre(
+    cost: float,
+    sale_price: float,
+    ad_type: str,
+    category: str,
+    extra_cost: float,
+    shipping: float,
+    tax_pct: float,
+    fixed_expenses_per_unit: float,
+    desired_margin_pct: float,
+    other_pct: float,
+) -> dict:
+    commission_pct = MERCADO_LIVRE["ad_types"][ad_type][category]
+    commission = sale_price * (commission_pct / 100)
+    fixed_fee = calc_ml_fixed_fee(sale_price)
+    tax = sale_price * (tax_pct / 100)
+    other_costs = sale_price * (other_pct / 100)
+    
+    total_fees = commission + fixed_fee + other_costs
+    total_cost = cost + total_fees + extra_cost + shipping + tax + fixed_expenses_per_unit
+    profit = sale_price - total_cost
+    you_receive = sale_price - total_fees - tax
+    margin = (profit / sale_price * 100) if sale_price > 0 else 0
+    roi = (profit / cost * 100) if cost > 0 else 0
+    
+    divisor = (1 - (commission_pct + tax_pct + desired_margin_pct + other_pct) / 100)
+    if divisor <= 0:
+        suggested_price = 0.0
+    else:
+        suggested_price = (cost + extra_cost + shipping + fixed_expenses_per_unit) / divisor
+        if suggested_price < 79.0:
+             suggested_price = (cost + extra_cost + shipping + fixed_expenses_per_unit + 6.50) / divisor
+            
+    return {
+        "profit": profit,
+        "margin": margin,
+        "roi": roi,
+        "total_fees": total_fees + tax, # Including tax in total fees display often helpful, but let's keep consistent
+        "commission": commission,
+        "commission_pct": commission_pct,
+        "fixed_fee": fixed_fee,
+        "tax": tax,
+        "you_receive": you_receive,
+        "suggested_price": round(suggested_price, 2),
+        "total_cost": total_cost,
+    }
+
+
+def calculate_amazon(
+    cost: float,
+    sale_price: float,
+    plan: str,
+    category: str,
+    extra_cost: float,
+    shipping: float,
+    tax_pct: float,
+    fixed_expenses_per_unit: float,
+    desired_margin_pct: float,
+    other_pct: float,
+) -> dict:
+    commission_pct = AMAZON["categories"][category]
+    commission = sale_price * (commission_pct / 100)
+    plan_fee = AMAZON["plans"][plan]
+    tax = sale_price * (tax_pct / 100)
+    other_costs = sale_price * (other_pct / 100)
+
+    total_fees = commission + plan_fee + other_costs
+    total_cost = cost + total_fees + extra_cost + shipping + tax + fixed_expenses_per_unit
+    profit = sale_price - total_cost
+    you_receive = sale_price - total_fees - tax
+    margin = (profit / sale_price * 100) if sale_price > 0 else 0
+    roi = (profit / cost * 100) if cost > 0 else 0
+    
+    divisor = (1 - (commission_pct + tax_pct + desired_margin_pct + other_pct) / 100)
+    if divisor <= 0:
+        suggested_price = 0.0
+    else:
+        suggested_price = (cost + extra_cost + shipping + plan_fee + fixed_expenses_per_unit) / divisor
+
+    return {
+        "profit": profit,
+        "margin": margin,
+        "roi": roi,
+        "total_fees": total_fees + tax,
+        "commission": commission,
+        "commission_pct": commission_pct,
+        "plan_fee": plan_fee,
+        "tax": tax,
+        "you_receive": you_receive,
+        "suggested_price": round(suggested_price, 2),
+        "total_cost": total_cost,
+    }
+
+
+def calculate_shopee(
+    cost: float,
+    sale_price: float,
+    category: str,
+    seller_type: str,
+    free_shipping: bool,
+    extra_cost: float,
+    shipping: float,
+    tax_pct: float,
+    fixed_expenses_per_unit: float,
+    desired_margin_pct: float,
+    other_pct: float,
+) -> dict:
+    commission_pct = SHOPEE["categories"][category]
+    if free_shipping:
+        commission_pct += SHOPEE["free_shipping_extra"]
+    commission = sale_price * (commission_pct / 100)
+    fixed_fee = SHOPEE["fixed_fee"]
+    
+    transaction_fee_pct = SHOPEE["cnpj_transaction_fee"] if seller_type == "CNPJ" else 0
+    transaction_fee = sale_price * (transaction_fee_pct / 100)
+    
+    tax = sale_price * (tax_pct / 100)
+    other_costs = sale_price * (other_pct / 100)
+
+    total_fees = commission + fixed_fee + transaction_fee + other_costs
+    total_cost = cost + total_fees + extra_cost + shipping + tax + fixed_expenses_per_unit
+    profit = sale_price - total_cost
+    you_receive = sale_price - total_fees - tax
+    margin = (profit / sale_price * 100) if sale_price > 0 else 0
+    roi = (profit / cost * 100) if cost > 0 else 0
+    
+    total_fee_pct = commission_pct + transaction_fee_pct
+    divisor = (1 - (total_fee_pct + tax_pct + desired_margin_pct + other_pct) / 100)
+    
+    if divisor <= 0:
+        suggested_price = 0.0
+    else:
+        suggested_price = (cost + extra_cost + shipping + fixed_fee + fixed_expenses_per_unit) / divisor
+
+    return {
+        "profit": profit,
+        "margin": margin,
+        "roi": roi,
+        "total_fees": total_fees + tax,
+        "commission": commission,
+        "commission_pct": commission_pct,
+        "fixed_fee": fixed_fee,
+        "transaction_fee": transaction_fee,
+        "tax": tax,
+        "you_receive": you_receive,
+        "suggested_price": round(suggested_price, 2),
+        "total_cost": total_cost,
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# TAB UPDATES
+# ─────────────────────────────────────────────────────────────
+
+def tab_mercado_livre(fixed: dict):
+    # ... (Same UI code) ...
+    # Re-implementing just the calling part to save lines, assuming you want me to be efficient.
+    # But replace_file_content needs context. I will use a larger block or verify I'm editing the right place.
+    # Since I need to change signatures in `calculate_*` and calls in `tab_*`, I'll do a MultiReplace or separate chunks.
+    # The previous `calculate_*` definitions are being replaced above.
+    # Now I need to update the CALLS within `tab_mercado_livre` etc.
+    pass 
+
+
+
+# ─────────────────────────────────────────────────────────────
+# CHART BUILDERS
+# ─────────────────────────────────────────────────────────────
+CHART_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="Inter, SF Pro Display, -apple-system, sans-serif", color="#e0e0e0", size=13),
+    margin=dict(l=20, r=20, t=40, b=40),
+    xaxis=dict(
+        showgrid=False,
+        showline=False,
+        zeroline=False,
+        tickfont=dict(size=12, color="#a0a0a0"),
+    ),
+    yaxis=dict(
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.06)",
+        showline=False,
+        zeroline=False,
+        tickfont=dict(size=12, color="#a0a0a0"),
+        tickprefix="R$ ",
+    ),
+    hoverlabel=dict(
+        bgcolor="rgba(30,30,40,0.95)",
+        bordercolor="rgba(255,255,255,0.1)",
+        font_size=13,
+        font_color="#fff",
+    ),
+    bargap=0.35,
+)
+
+UNITS_PER_DAY = [5, 10, 20, 30, 50, 100]
+
+
+def build_projection_chart(
+    profit_per_unit: float,
+    title: str,
+    color_gradient: list[str],
+) -> go.Figure:
+    """Build a bar chart showing monthly profit projections."""
+    monthly = [profit_per_unit * u * 30 for u in UNITS_PER_DAY]
+    labels = [f"{u} vendas/dia" for u in UNITS_PER_DAY]
+
+    colors = []
+    for val in monthly:
+        if val >= 0:
+            colors.append(color_gradient[0])
+        else:
+            colors.append("#ff4d6a")
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=labels,
+            y=monthly,
+            marker=dict(
+                color=colors,
+                cornerradius=8,
+                line=dict(width=0),
+            ),
+            text=[f"R$ {v:,.2f}" for v in monthly],
+            textposition="outside",
+            textfont=dict(size=12, color="#e0e0e0"),
+            hovertemplate="<b>%{x}</b><br>Lucro mensal: R$ %{y:,.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16, color="#fff"), x=0, xanchor="left"),
+        height=380,
+        **CHART_LAYOUT,
+    )
+    return fig
+
+
+def build_comparison_chart(
+    profit_without: float,
+    profit_with: float,
+) -> go.Figure:
+    """Build a grouped bar chart comparing profit with/without fixed expenses."""
+    monthly_without = [profit_without * u * 30 for u in UNITS_PER_DAY]
+    monthly_with = [profit_with * u * 30 for u in UNITS_PER_DAY]
+    labels = [f"{u}/dia" for u in UNITS_PER_DAY]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            name="Sem despesas fixas",
+            x=labels,
+            y=monthly_without,
+            marker=dict(color="rgba(0, 210, 140, 0.85)", cornerradius=6),
+            hovertemplate="<b>Sem desp. fixas</b><br>%{x}: R$ %{y:,.2f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            name="Com despesas fixas",
+            x=labels,
+            y=monthly_with,
+            marker=dict(color="rgba(0, 150, 255, 0.85)", cornerradius=6),
+            hovertemplate="<b>Com desp. fixas</b><br>%{x}: R$ %{y:,.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(
+            text="📊 Comparativo: Com vs Sem Despesas Fixas (Lucro Mensal)",
+            font=dict(size=16, color="#fff"),
+            x=0,
+            xanchor="left",
+        ),
+        barmode="group",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=12, color="#ccc"),
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        height=400,
+        **CHART_LAYOUT,
+    )
+    return fig
+
+
+def build_breakeven_chart(
+    fixed_costs: float,
+    contribution_margin: float,
+) -> go.Figure:
+    """Build a chart visualizing the break-even point."""
+    if contribution_margin <= 0:
+        return None
+
+    breakeven_units = fixed_costs / contribution_margin if contribution_margin > 0 else 0
+    
+    # Create a range of units around the break-even point
+    max_units = max(int(breakeven_units * 2), 50)
+    step = max(1, max_units // 20)
+    units_range = list(range(0, max_units + step, step))
+    
+    # Calculate profit for each unit count
+    # Profit = (Margin * Units) - Fixed Costs
+    profits = [(contribution_margin * u) - fixed_costs for u in units_range]
+    
+    # Colors: Red below zero, Green above
+    colors = ["#ff453a" if p < 0 else "#30d158" for p in profits]
+
+    fig = go.Figure()
+    
+    # Add Profit Line
+    fig.add_trace(
+        go.Scatter(
+            x=units_range,
+            y=profits,
+            mode="lines+markers",
+            line=dict(color="#0a84ff", width=3),
+            marker=dict(size=6, color=colors, line=dict(color="#fff", width=1)),
+            name="Lucro Líquido",
+            hovertemplate="<b>%{x} vendas</b><br>Lucro: R$ %{y:,.2f}<extra></extra>",
+        )
+    )
+    
+    # Add Break-even Line (Zero)
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        line_color="rgba(255,255,255,0.3)",
+        annotation_text="Ponto de Equilíbrio",
+        annotation_position="bottom right",
+    )
+    
+    # Add Vertical Line at Break-even units
+    fig.add_vline(
+        x=breakeven_units,
+        line_dash="dot",
+        line_color="#ffd60a",
+        annotation_text=f"Breakeven: {int(math.ceil(breakeven_units))} un.",
+        annotation_position="top left",
+    )
+
+    fig.update_layout(
+        title=dict(
+            text=f"🎯 Ponto de Equilíbrio: {int(math.ceil(breakeven_units))} vendas/mês",
+            font=dict(size=16, color="#fff"),
+            x=0,
+            xanchor="left",
+        ),
+        xaxis_title="Quantidade de Vendas",
+        yaxis_title="Lucro Líquido (R$)",
+        height=400,
+        **CHART_LAYOUT,
+    )
+    return fig
+
+
+# ─────────────────────────────────────────────────────────────
+# iOS 26 LIQUID GLASS CSS
+# ─────────────────────────────────────────────────────────────
+def inject_css():
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+        /* ── Root variables (iOS 26 Theme) ────── */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+            --glass-blur: blur(24px);
+            --text-primary: #1d1d1f;
+            --text-secondary: #86868b;
+            --accent-green: #34c759;
+            --accent-red: #ff3b30;
+            --accent-blue: #007aff;
+            --accent-orange: #ff9500;
+            --accent-yellow: #ffcc00;
+            --radius-lg: 24px;
+            --radius-md: 18px;
+            --radius-sm: 12px;
+            --bg-gradient: radial-gradient(circle at top left, #fbfbfd 0%, #f5f5f7 100%);
+        }
+
+
+
+        /* ── Global resets ────────────────────── */
+        html, body, [data-testid="stAppViewContainer"] {
+            background: var(--bg-gradient) !important;
+            color: var(--text-primary) !important;
+            font-family: 'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        [data-testid="stHeader"] {
+            background: transparent !important;
+        }
+
+        [data-testid="stSidebar"] {
+            background: var(--glass-bg) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            border-right: 1px solid var(--glass-border) !important;
+        }
+
+        /* ── Streamlit tab overrides ──────────── */
+        .stTabs [data-baseweb="tab-list"] {
+            background: rgba(118, 118, 128, 0.12) !important;
+            backdrop-filter: blur(10px) !important;
+            border-radius: 99px !important; /* Pill shape */
+            padding: 4px !important;
+            gap: 2px !important;
+            border: none !important;
+            box-shadow: none !important;
+            width: fit-content;
+            margin: 0 auto 20px auto;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            background: transparent !important;
+            color: var(--text-secondary) !important;
+            border-radius: 99px !important;
+            border: none !important;
+            padding: 8px 24px !important;
+            font-weight: 500 !important;
+            font-size: 14px !important;
+            transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+        }
+
+        .stTabs [aria-selected="true"] {
+            background: #fff !important; /* Light mode pill */
+            color: #000 !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+        }
+
+
+
+        .stTabs [data-baseweb="tab-highlight"],
+        .stTabs [data-baseweb="tab-border"] {
+            display: none !important;
+        }
+
+        /* ── Input fields ─────────────────────── */
+        .stNumberInput > div > div > input,
+        .stSelectbox > div > div,
+        .stTextInput > div > div > input {
+            background: rgba(118, 118, 128, 0.06) !important;
+            border: 1px solid transparent !important;
+            border-radius: var(--radius-sm) !important;
+            color: var(--text-primary) !important;
+            font-size: 15px !important;
+            transition: all 0.2s ease !important;
+            padding-left: 12px;
+        }
+
+        .stNumberInput > div > div > input:focus,
+        .stTextInput > div > div > input:focus {
+            background: rgba(118, 118, 128, 0.03) !important;
+            border-color: var(--accent-blue) !important;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1) !important;
+        }
+        
+        /* Remove +/- buttons on number input for cleaner look (optional, but requested cleaner) */
+        /* Actually keeping them but styling them minimalist */
+        .stNumberInput button {
+             background: transparent !important;
+             border: none !important;
+             color: var(--text-secondary) !important;
+        }
+        .stNumberInput button:hover {
+            color: var(--text-primary) !important;
+        }
+
+        /* ── Expander ────────────────────────── */
+        .streamlit-expanderHeader {
+            background: var(--glass-bg) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: var(--radius-md) !important;
+            color: var(--text-primary) !important;
+        }
+        
+        [data-testid="stExpander"] {
+            border: none !important;
+            box-shadow: var(--glass-shadow) !important;
+            border-radius: var(--radius-lg) !important;
+            background: var(--glass-bg);
+        }
+
+        /* ── Plotly chart containers ──────────── */
+        .stPlotlyChart {
+            background: var(--glass-bg) !important;
+            backdrop-filter: var(--glass-blur) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: var(--radius-lg) !important;
+            padding: 20px !important;
+            box-shadow: var(--glass-shadow) !important;
+        }
+
+        /* ── Custom result cards ──────────────── */
+        .result-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--glass-shadow);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .result-card:hover {
+            transform: scale(1.02);
+        }
+
+        .result-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 8px;
+        }
+
+        .result-value {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+        }
+        
+        .result-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .positive { color: var(--accent-green) !important; }
+        .negative { color: var(--accent-red) !important; }
+        .neutral { color: var(--accent-blue) !important; }
+        .orange { color: var(--accent-orange) !important; }
+        .yellow { color: var(--accent-yellow) !important; }
+
+        /* ── Hero header ──────────────────────── */
+        .hero-title {
+            font-size: 42px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(180deg, var(--text-primary) 0%, var(--text-secondary) 150%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        
+        /* ── Helpers ──────────────────────────── */
+        hr { border-color: rgba(118, 118, 128, 0.2) !important; }
+        
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# UI COMPONENTS
+# ─────────────────────────────────────────────────────────────
+def render_result_card(label: str, value: str, color_class: str, sub: str = ""):
+    sub_html = f'<div class="result-sub">{sub}</div>' if sub else ""
+    st.markdown(
+        f"""
+        <div class="result-card">
+            <div class="result-label">{label}</div>
+            <div class="result-value {color_class}">{value}</div>
+            {sub_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_results(result: dict, title: str = "📊 Resultados por Venda"):
+    """Render result cards and charts."""
+    profit = result["profit"]
+    color = "positive" if profit >= 0 else "negative"
+
+    st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        render_result_card(
+            "Lucro Líquido",
+            f"R$ {profit:,.2f}",
+            color,
+            "por venda",
+        )
+    with c2:
+        render_result_card(
+            "Preço Sugerido",
+            f"R$ {result['suggested_price']:,.2f}",
+            "neutral",
+            "baseado na margem",
+        )
+    with c3:
+        render_result_card(
+            "Margem Líquida",
+            f"{result['margin']:.1f}%",
+            color,
+        )
+    with c4:
+        render_result_card(
+            "Tarifas Totais",
+            f"R$ {result['total_fees']:,.2f}",
+            "orange",
+            f"{result['commission_pct']:.0f}% comissão",
+        )
+    with c5:
+        render_result_card(
+            "Você Recebe",
+            f"R$ {result['you_receive']:,.2f}",
+            "yellow",
+            "após tarifas",
+        )
+
+
+def render_charts(
+    result_no_fixed: dict,
+    result_with_fixed: dict | None,
+    has_fixed_expenses: bool,
+    total_fixed_expenses: float = 0.0,
+):
+    """Render projection charts."""
+    st.markdown("---")
+    
+    st.markdown(
+        '<div class="section-title">📈 Projeção de Lucro Mensal</div>',
+        unsafe_allow_html=True,
+    )
+
+    fig1 = build_projection_chart(
+        result_no_fixed["profit"],
+        "💰 Projeção Mensal (Margem de Contribuição)",
+        ["rgba(48, 209, 88, 0.8)"],
+    )
+    st.plotly_chart(fig1, use_container_width=True, config={"displayModeBar": False})
+
+
+
+    if has_fixed_expenses and result_with_fixed is not None:
+        st.markdown("---")
+        c_chart1, c_chart2 = st.columns(2)
+        
+        with c_chart1:
+             fig2 = build_comparison_chart(
+                result_no_fixed["profit"],
+                result_with_fixed["profit"],
+            )
+             st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+             
+        with c_chart2:
+             # Contribution margin is the profit without fixed expenses
+             contribution_margin = result_no_fixed["profit"]
+             fig3 = build_breakeven_chart(total_fixed_expenses, contribution_margin)
+             if fig3:
+                 st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False})
+             else:
+                 st.info("Margem de contribuição negativa ou zero. Impossível calcular ponto de equilíbrio.")
+
+
+def render_fixed_expenses() -> dict:
+    """Render optional fixed monthly expenses section and return values."""
+    with st.expander("💼 Despesas Fixas Mensais (opcional)", expanded=False):
+        st.markdown(
+            """
+            <div style="font-size:13px; color:#a1a1aa; margin-bottom:12px;">
+                Informe seus gastos fixos mensais. Eles serão rateados por unidade vendida
+                nas projeções com despesas fixas.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            mei = st.number_input(
+                "MEI (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="mei",
+                help="Contribuição mensal do MEI",
+            )
+        with fc2:
+            platform = st.number_input(
+                "Plataforma / NF-e (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="platform",
+                help="Plataforma de nota fiscal / integração",
+            )
+        with fc3:
+            supplier = st.number_input(
+                "Assinatura Fornecedor (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="supplier",
+                help="Assinatura mensal do fornecedor",
+            )
+
+        fc4, fc5, _ = st.columns(3)
+        with fc4:
+            other_fixed = st.number_input(
+                "Outros Custos Fixos (R$/mês)",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                format="%.2f",
+                key="other_fixed",
+                help="Internet, luz, marketing fixo, etc.",
+            )
+        with fc5:
+            estimated_sales = st.number_input(
+                "Vendas estimadas/mês (para rateio)",
+                min_value=1,
+                value=30,
+                step=5,
+                key="estimated_sales",
+                help="Quantidade estimada de vendas por mês para calcular o custo fixo por unidade",
+            )
+            
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style="font-size:13px; color:#a1a1aa; margin-bottom:12px;">
+                <b>Taxas e Custos Operacionais (% sobre a venda)</b><br>
+                Valores percentuais que incidem sobre o preço de venda ou custos variáveis.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        
+        op1, op2, op3 = st.columns(3)
+        with op1:
+            marketing_pct = st.number_input(
+                "Marketing / Ads (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.5,
+                format="%.1f",
+                key="marketing_pct",
+                help="ACOS médio ou % investido em publicidade",
+            )
+        with op2:
+            antecipation_pct = st.number_input(
+                "Antecipação / Financeiro (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+                key="antecipation_pct",
+                help="Taxa para antecipar recebíveis (se houver)",
+            )
+        with op3:
+            losses_pct = st.number_input(
+                "Perdas / Devoluções (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+                key="losses_pct",
+                help="Provisão para extravios e devoluções",
+            )
+            
+        op4, _, _ = st.columns(3)
+        with op4:
+            other_taxes_pct = st.number_input(
+                "Outros Impostos (DIFAL/ST) (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                format="%.1f",
+                key="other_taxes_pct",
+                help="Percentual estimado para DIFAL, ICMS-ST ou outros impostos",
+            )
+
+    total_fixed = mei + platform + supplier + other_fixed
+    fixed_per_unit = total_fixed / estimated_sales if estimated_sales > 0 else 0
+    total_other_pct = marketing_pct + antecipation_pct + losses_pct + other_taxes_pct
+
+    return {
+        "total_monthly": total_fixed,
+        "per_unit": fixed_per_unit,
+        "estimated_sales": estimated_sales,
+        "has_expenses": total_fixed > 0 or total_other_pct > 0,
+        "other_pct": total_other_pct,
+        "total_monthly_fixed": total_fixed, # explicit key for charts
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# MARKETPLACE TABS
+# ─────────────────────────────────────────────────────────────
+def tab_mercado_livre(fixed: dict, product_name: str):
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    with col1:
+        st.markdown(
+            '<div class="section-title">🟡 Dados do Produto</div>',
+            unsafe_allow_html=True,
+        )
+        a1, a2 = st.columns(2)
+        with a1:
+            cost = st.number_input(
+                "Custo do Produto (R$)",
+                min_value=0.0,
+                value=50.0,
+                step=1.0,
+                format="%.2f",
+                key="ml_cost",
+            )
+        with a2:
+            sale_price = st.number_input(
+                "Preço de Venda (R$)",
+                min_value=0.0,
+                value=120.0,
+                step=1.0,
+                format="%.2f",
+                key="ml_sale",
+            )
+
+        b1, b2 = st.columns(2)
+        with b1:
+            ad_type = st.selectbox(
+                "Tipo de Anúncio",
+                list(MERCADO_LIVRE["ad_types"].keys()),
+                key="ml_ad_type",
+            )
+        with b2:
+            category = st.selectbox(
+                "Categoria",
+                list(MERCADO_LIVRE["ad_types"][ad_type].keys()),
+                key="ml_category",
+            )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            extra_cost = st.number_input(
+                "Custo Extra (R$)",
+                min_value=0.0,
+                value=0.0,
+                step=0.5,
+                format="%.2f",
+                key="ml_extra",
+                help="Embalagem, etiqueta, etc.",
+            )
+        with c2:
+            shipping = st.number_input(
+                "Frete do Vendedor (R$)",
+                min_value=0.0,
+                value=0.0,
+                step=1.0,
+                format="%.2f",
+                key="ml_shipping",
+            )
+        with c3:
+            tax_pct = st.number_input(
+                "Imposto (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.5,
+                format="%.1f",
+                key="ml_tax",
+            )
+            
+        st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
+        d1, _ = st.columns([1, 1])
+        with d1:
+            desired_margin = st.number_input(
+                "Margem Desejada (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=20.0,
+                step=1.0,
+                format="%.1f",
+                key="ml_desired_margin",
+                help="Margem de lucro líquido desejada para o cálculo do Preço Sugerido",
+            )
+
+    result_no_fixed = calculate_mercado_livre(
+        cost, sale_price, ad_type, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
+    )
+
+    result_with_fixed = None
+    if fixed["has_expenses"]:
+        result_with_fixed = calculate_mercado_livre(
+            cost, sale_price, ad_type, category, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
+        )
+
+    with col2:
+        render_results(result_no_fixed, "📊 Resultados (Sem Despesas Fixas)")
+        if result_with_fixed:
+            st.markdown("---")
+            render_results(result_with_fixed, "💼 Resultados (Com Despesas Fixas)")
+
+    render_charts(result_no_fixed, result_with_fixed, fixed["has_expenses"], fixed["total_monthly_fixed"])
+
+    if st.button("💾 Salvar Simulação (Mercado Livre)", type="primary", use_container_width=True):
+        save_simulation(
+            "Mercado Livre", 
+            product_name, 
+            result_no_fixed, 
+            result_with_fixed if fixed["has_expenses"] else None
+        )
+        st.success("✅ Simulação salva com sucesso!")
+
+
+def tab_amazon(fixed: dict, product_name: str):
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    with col1:
+        st.markdown(
+            '<div class="section-title">📦 Dados do Produto</div>',
+            unsafe_allow_html=True,
+        )
+        a1, a2 = st.columns(2)
+        with a1:
+            cost = st.number_input(
+                "Custo do Produto (R$)",
+                min_value=0.0,
+                value=50.0,
+                step=1.0,
+                format="%.2f",
+                key="amz_cost",
+            )
+        with a2:
+            sale_price = st.number_input(
+                "Preço de Venda (R$)",
+                min_value=0.0,
+                value=120.0,
+                step=1.0,
+                format="%.2f",
+                key="amz_sale",
+            )
+
+        b1, b2 = st.columns(2)
+        with b1:
+            plan = st.selectbox(
+                "Plano de Venda",
+                list(AMAZON["plans"].keys()),
+                key="amz_plan",
+            )
+        with b2:
+            category = st.selectbox(
+                "Categoria",
+                list(AMAZON["categories"].keys()),
+                key="amz_category",
+            )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            extra_cost = st.number_input(
+                "Custo Extra (R$)",
+                min_value=0.0,
+                value=0.0,
+                step=0.5,
+                format="%.2f",
+                key="amz_extra",
+                help="Embalagem, etiqueta, etc.",
+            )
+        with c2:
+            shipping = st.number_input(
+                "Frete do Vendedor (R$)",
+                min_value=0.0,
+                value=0.0,
+                step=1.0,
+                format="%.2f",
+                key="amz_shipping",
+            )
+        with c3:
+            tax_pct = st.number_input(
+                "Imposto (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.5,
+                format="%.1f",
+                key="amz_tax",
+            )
+        
+        st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
+        d1, _ = st.columns([1, 1])
+        with d1:
+            desired_margin = st.number_input(
+                "Margem Desejada (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=20.0,
+                step=1.0,
+                format="%.1f",
+                key="amz_desired_margin",
+                help="Margem de lucro líquido desejada para o cálculo do Preço Sugerido",
+            )
+
+    result_no_fixed = calculate_amazon(
+        cost, sale_price, plan, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
+    )
+
+    result_with_fixed = None
+    if fixed["has_expenses"]:
+        result_with_fixed = calculate_amazon(
+            cost, sale_price, plan, category, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
+        )
+
+    with col2:
+        render_results(result_no_fixed, "📊 Resultados (Sem Despesas Fixas)")
+        if result_with_fixed:
+            st.markdown("---")
+            render_results(result_with_fixed, "💼 Resultados (Com Despesas Fixas)")
+
+    render_charts(result_no_fixed, result_with_fixed, fixed["has_expenses"], fixed["total_monthly_fixed"])
+
+    if st.button("💾 Salvar Simulação (Amazon)", type="primary", use_container_width=True):
+        save_simulation(
+            "Amazon", 
+            product_name, 
+            result_no_fixed, 
+            result_with_fixed if fixed["has_expenses"] else None
+        )
+        st.success("✅ Simulação salva com sucesso!")
+
+
+def tab_shopee(fixed: dict, product_name: str):
+    col1, col2 = st.columns([1, 1], gap="large")
+
+    with col1:
+        st.markdown(
+            '<div class="section-title">🟠 Dados do Produto</div>',
+            unsafe_allow_html=True,
+        )
+        a1, a2 = st.columns(2)
+        with a1:
+            cost = st.number_input(
+                "Custo do Produto (R$)",
+                min_value=0.0,
+                value=50.0,
+                step=1.0,
+                format="%.2f",
+                key="sp_cost",
+            )
+        with a2:
+            sale_price = st.number_input(
+                "Preço de Venda (R$)",
+                min_value=0.0,
+                value=120.0,
+                step=1.0,
+                format="%.2f",
+                key="sp_sale",
+            )
+
+        b1, b2 = st.columns(2)
+        with b1:
+            category = st.selectbox(
+                "Categoria",
+                list(SHOPEE["categories"].keys()),
+                key="sp_category",
+            )
+        with b2:
+            seller_type = st.radio(
+                "Tipo de Vendedor",
+                ["CPF", "CNPJ"],
+                horizontal=True,
+                key="sp_seller",
+            )
+
+        free_shipping = st.checkbox(
+            "Programa Frete Grátis (+6%)",
+            value=False,
+            key="sp_free_ship",
+            help="Participa do programa Frete Grátis da Shopee?",
+        )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            extra_cost = st.number_input(
+                "Custo Extra (R$)",
+                min_value=0.0,
+                value=0.0,
+                step=0.5,
+                format="%.2f",
+                key="sp_extra",
+                help="Embalagem, etiqueta, etc.",
+            )
+        with c2:
+            shipping = st.number_input(
+                "Frete do Vendedor (R$)",
+                min_value=0.0,
+                value=0.0,
+                step=1.0,
+                format="%.2f",
+                key="sp_shipping",
+            )
+        with c3:
+            tax_pct = st.number_input(
+                "Imposto (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.5,
+                format="%.1f",
+                key="sp_tax",
+            )
+            
+        st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
+        d1, _ = st.columns([1, 1])
+        with d1:
+            desired_margin = st.number_input(
+                "Margem Desejada (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=20.0,
+                step=1.0,
+                format="%.1f",
+                key="sp_desired_margin",
+                help="Margem de lucro líquido desejada para o cálculo do Preço Sugerido",
+            )
+
+    result_no_fixed = calculate_shopee(
+        cost, sale_price, category, seller_type, free_shipping, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
+    )
+
+    result_with_fixed = None
+    if fixed["has_expenses"]:
+        result_with_fixed = calculate_shopee(
+            cost, sale_price, category, seller_type, free_shipping, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
+        )
+
+    with col2:
+        render_results(result_no_fixed, "📊 Resultados (Sem Despesas Fixas)")
+        if result_with_fixed:
+            st.markdown("---")
+            render_results(result_with_fixed, "💼 Resultados (Com Despesas Fixas)")
+
+    render_charts(result_no_fixed, result_with_fixed, fixed["has_expenses"], fixed["total_monthly_fixed"])
+
+    if st.button("💾 Salvar Simulação (Shopee)", type="primary", use_container_width=True):
+        save_simulation(
+            "Shopee", 
+            product_name, 
+            result_no_fixed, 
+            result_with_fixed if fixed["has_expenses"] else None
+        )
+        st.success("✅ Simulação salva com sucesso!")
+
+
+# ─────────────────────────────────────────────────────────────
+# MAIN APP
+# ─────────────────────────────────────────────────────────────
+def save_simulation(platform: str, product_name: str, result_no_fixed: dict, result_with_fixed: dict | None):
+    """Save the current simulation to session state."""
+    
+    # Determine which result to use (prefer with fixed expenses if available)
+    target_result = result_with_fixed if result_with_fixed else result_no_fixed
+    
+    # Current timestamp
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Create record
+    record = {
+        "Data/Hora": timestamp,
+        "Produto": product_name if product_name else "Produto Sem Nome",
+        "Plataforma": platform,
+        "Custo (R$)": round(target_result["total_cost"] - target_result["total_fees"] - target_result["tax"], 2), # Approx raw cost
+        "Venda (R$)": target_result.get("suggested_price", 0.0), # This might be wrong, need actual sale price
+        # Actually, the result dicts don't store the input sale_price directly, 
+        # but we can infer it or just store what we have. 
+        # Wait, the result dict DOES NOT have the sale_price input.
+        # I should probably pass the sale_price to save_simulation or retrieve it from keys.
+        # However, looking at the code, `result_no_fixed` has `profit`, `margin`, `total_cost`.
+        # Profit = Sale - Cost. So Sale = Profit + Cost.
+        "Venda (R$)": round(target_result["total_cost"] + target_result["profit"], 2),
+        "Lucro (R$)": round(target_result["profit"], 2),
+        "Margem (%)": round(target_result["margin"], 2),
+        "ROI (%)": round(target_result["roi"], 2),
+        "Custo Total (R$)": round(target_result["total_cost"], 2),
+        "Taxas (R$)": round(target_result["total_fees"], 2),
+        "Imposto (R$)": round(target_result["tax"], 2),
+    }
+    
+    st.session_state["saved_simulations"].append(record)
+
+
+def render_saved_simulations():
+    """Render the section with saved simulations and export options."""
+    st.markdown("---")
+    st.markdown("## 📋 Simulações Salvas")
+
+    if not st.session_state["saved_simulations"]:
+        st.info("Nenhuma simulação salva ainda. Faça um cálculo e clique em 'Salvar Simulação'.")
+        return
+
+    # Convert to DataFrame
+    df = pd.DataFrame(st.session_state["saved_simulations"])
+    
+    # Reorder columns for better readability if they exist
+    cols = [
+        "Data/Hora", "Produto", "Plataforma", 
+        "Custo (R$)", "Venda (R$)", "Lucro (R$)", 
+        "Margem (%)", "ROI (%)", "Custo Total (R$)"
+    ]
+    # Filter only columns that actually exist in df
+    cols = [c for c in cols if c in df.columns]
+    # Add remaining columns
+    remaining = [c for c in df.columns if c not in cols]
+    df = df[cols + remaining]
+
+    st.dataframe(df, use_container_width=True)
+
+    c1, c2 = st.columns([1, 4])
+    with c1:
+        # Export button
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Baixar CSV",
+            data=csv,
+            file_name=f"simulacoes_lucro_{int(time.time())}.csv",
+            mime="text/csv",
+        )
+    with c2:
+        if st.button("🗑️ Limpar Lista"):
+            st.session_state["saved_simulations"] = []
+            st.rerun()
+
+
+def main():
+    inject_css()
+
+    # Hero header
+    st.markdown(
+        """
+        <div style="padding: 40px 0 10px 0;">
+            <div class="hero-title">💰 Calculadora de Lucro</div>
+            <div class="hero-sub">
+                Calcule seu lucro real vendendo na Amazon, Mercado Livre e Shopee
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Global Inputs
+    with st.container():
+        st.markdown('<div class="glass-container">', unsafe_allow_html=True)
+        product_name = st.text_input("📦 Nome do Produto / SKU (Opcional)", placeholder="Ex: Fone Bluetooth XYZ", help="Identificador para salvar na lista.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Fixed expenses section (shared across all tabs)
+    fixed = render_fixed_expenses()
+
+    if fixed["has_expenses"]:
+        st.markdown(
+            f"""
+            <div class="glass-container" style="text-align:center; padding:14px 24px;">
+                <span style="color:#a1a1aa; font-size:13px;">
+                    Despesas fixas: <b style="color:#ff9f0a;">R$ {fixed['total_monthly']:,.2f}/mês</b>
+                    &nbsp;→&nbsp; Custo por unidade:
+                    <b style="color:#0a84ff;">R$ {fixed['per_unit']:,.2f}</b>
+                    <span style="color:#666; font-size:12px;">
+                        (baseado em {fixed['estimated_sales']} vendas/mês)
+                    </span>
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    # Tabs
+    tab1, tab2, tab3 = st.tabs(["Mercado Livre", "Amazon", "Shopee"])
+
+    with tab1:
+        tab_mercado_livre(fixed, product_name)
+    with tab2:
+        tab_amazon(fixed, product_name)
+    with tab3:
+        tab_shopee(fixed, product_name)
+        
+    # Saved Simulations Section
+    render_saved_simulations()
+
+    # Footer
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align: center; color: #666; font-size: 12px;">
+            <p>
+                Calculadora de Lucro para Marketplaces. 
+                Os valores são estimativas e podem variar. Consulte as taxas oficiais.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+if __name__ == "__main__":
+    main()
