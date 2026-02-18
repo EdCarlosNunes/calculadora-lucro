@@ -2234,7 +2234,7 @@ def main():
         st.session_state["current_view"] = "calculator"
 
     # Navbar Logic
-    # New "Segmented Control" Style using Radio Button
+    # Minimalist Text Navbar (Apple Style)
     st.markdown(
         """
         <style>
@@ -2246,32 +2246,33 @@ def main():
             display: none !important;
         }
         
-        /* 2. Style the Container (The gray pill track) */
+        /* 2. Style the Container (Transparent, just text alignment) */
         div[role="radiogroup"] {
-            background-color: #eeeeef; /* iOS Light Gray Track */
-            padding: 3px;
-            border-radius: 8px; /* Rounded pill */
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
             display: flex;
             justify-content: center;
             width: fit-content;
             margin: 0 auto 20px auto;
-            border: 1px solid #e0e0e0;
+            border: none;
+            gap: 20px; /* Space between text links */
         }
         
-        /* 3. Style the Option Labels (The clickable items) */
+        /* 3. Style the Option Labels (The clickable text) */
         div[role="radiogroup"] label {
             background-color: transparent;
-            padding: 8px 30px; /* Wider click area */
-            border-radius: 6px;
+            padding: 5px 10px;
+            border-radius: 0;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4,0,0.2,1); /* Smooth snap */
+            transition: all 0.2s ease;
             text-align: center;
             border: none;
             margin: 0;
-            color: #636366; /* iOS Gray Text */
-            font-weight: 500;
+            color: #86868b; /* Apple Gray Text */
+            font-weight: 400;
             font-size: 14px;
-            flex: 1; /* Equal width */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2279,17 +2280,19 @@ def main():
         
         /* 4. Hover State */
         div[role="radiogroup"] label:hover {
-            opacity: 0.8;
+            color: #1d1d1f; /* Apple Hover Black */
+            background-color: transparent;
         }
         
-        /* 5. SELECTED STATE (Magic with :has) */
-        /* Takes effect when the input inside is checked */
+        /* 5. SELECTED STATE (Bold Black Text) */
         div[role="radiogroup"] label:has(input:checked) {
-            background-color: #ffffff !important;
-            color: #000000 !important;
+            background-color: transparent !important;
+            color: #1d1d1f !important; /* Apple Black */
             font-weight: 600;
-            box-shadow: 0 3px 8px rgba(0,0,0,0.12), 0 3px 1px rgba(0,0,0,0.04); /* iOS Shadow */
-            border: 0.5px solid rgba(0,0,0,0.04);
+            /* Optional: Add a subtle underline if desired, but Apple usually just bolds or grays out others */
+            /* border-bottom: 1px solid #000; */ 
+            box-shadow: none;
+            border: none;
         }
         </style>
         """, unsafe_allow_html=True
@@ -2300,7 +2303,8 @@ def main():
         c1, c2, c3 = st.columns([1, 6, 1])
         
         with c1:
-             st.markdown('<div style="font-size: 28px; padding-top: 5px;">🧮</div>', unsafe_allow_html=True)
+             # Black Dollar Sign Logo
+             st.markdown('<div style="font-size: 24px; font-weight: 900; color: #000; padding-top: 5px;">$</div>', unsafe_allow_html=True)
              
         with c2:
             # Centered Navigation
