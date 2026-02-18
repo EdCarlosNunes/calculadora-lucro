@@ -776,26 +776,17 @@ def inject_css():
         /* ── Custom result cards ──────────────── */
         /* Navbar */
         .navbar {
-            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); /* Pastel Orange */
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); /* Light Gray */
             padding: 15px 25px;
             border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(234, 88, 12, 0.05);
-            color: #9a3412; /* Dark Orange/Brown for contrast */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            color: #343a40; /* Dark Gray/Black for contrast */
             margin-bottom: 25px;
             display: flex;
             align-items: center;
-            justify-content: space-between; /* Updated */
-            gap: 12px;
-            border: 1px solid var(--glass-border); /* Updated */
-        }
-        /* Remove top padding from Streamlit content */
-        .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 5rem !important;
-        }
-        /* Hide default Streamlit header decoration if desired, or just let it be */
-        header {
-            visibility: hidden;
+            justify-content: flex-start; /* Left align */
+            gap: 15px;
+            border: 1px solid #dee2e6; /* Gray border */
         }
         .navbar-logo {
             font-size: 28px;
@@ -812,7 +803,7 @@ def inject_css():
             font-size: 20px;
             font-weight: 700;
             letter-spacing: -0.01em;
-            color: #9a3412;
+            color: #212529; /* Almost Black */
         }
 
         .results-container {
