@@ -806,9 +806,9 @@ def inject_css():
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); /* Soft shadow */
             text-align: center;
             transition: transform 0.3s ease;
-            flex: 1 1 300px; /* Grow, Shrink, Basis - adjusted for 3 up on desktop */
-            min-width: 250px; /* Force minimum width to wrap if needed */
-            max-width: 100%; /* Allow full width on mobile if needed */
+            flex: 1 1 100px; /* Allow shrinking */
+            min-width: 0; /* Remove fixed minimum width to allow grid flex */
+            width: 100%; /* Ensure it fills the grid cell */
         }
 
         .result-card:hover {
@@ -823,7 +823,8 @@ def inject_css():
             text-transform: uppercase !important;
             letter-spacing: 0.05em !important;
             margin-bottom: 8px !important;
-            white-space: nowrap !important;
+            white-space: normal !important; /* Allow wrapping */
+            word-wrap: break-word !important;
         }
 
         .result-value {
@@ -831,8 +832,9 @@ def inject_css():
             font-weight: 800 !important;
             letter-spacing: -0.02em !important;
             color: #000000 !important; /* Force Black */
-            white-space: nowrap !important;
-            line-height: 1.2 !important;
+            white-space: normal !important; /* Allow wrapping */
+            word-wrap: break-word !important;
+            line-height: 1.1 !important;
         }
         
         .result-sub {
