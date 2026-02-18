@@ -8,10 +8,13 @@ import time
 import os
 import pdfplumber
 import re
+import duckduckgo_search
 try:
     from duckduckgo_search import DDGS
 except ImportError:
     DDGS = None
+
+import google.generativeai as genai
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -2306,13 +2309,13 @@ def main():
         
         with c1:
              # Black Dollar Sign Logo
-             st.markdown('<div style="font-size: 24px; font-weight: 900; color: #000; padding-top: 5px; padding-left: 10px;">$</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size: 24px; font-weight: 900; color: #000; padding-top: 5px; padding-left: 10px;">$</div>', unsafe_allow_html=True)
              
         with c2:
             # Navigation (Left Aligned via CSS)
             selected_section = st.radio(
                 "Navegação",
-                ["Calculadora de Venda", "Organização Financeira"],
+                ["Calculadora de Venda", "Organização Financeira", "Chat IA"],
                 horizontal=True,
                 label_visibility="collapsed",
                 key="nav_radio"
@@ -2321,8 +2324,10 @@ def main():
             # Map radio selection to internal view state
             if selected_section == "Calculadora de Venda":
                 st.session_state["current_view"] = "calculator"
-            else:
+            elif selected_section == "Organização Financeira":
                 st.session_state["current_view"] = "financial"
+            else:
+                st.session_state["current_view"] = "chat"
     
     # Divider REMOVED as requested    
 
@@ -2331,6 +2336,8 @@ def main():
         render_calculator_view("") # Pass empty string or handle logic inside
     elif st.session_state["current_view"] == "financial":
         render_financial_view()
+    elif st.session_state["current_view"] == "chat":
+        render_chat_view()
 
     # Footer
     st.markdown("---")
