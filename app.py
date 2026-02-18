@@ -1,6 +1,7 @@
 import math
 import streamlit as st
 import plotly.graph_objects as go
+import plotly.express as px
 import pandas as pd
 import time
 
@@ -1802,8 +1803,17 @@ def parse_pdf(uploaded_file):
                     description = re.sub(r'^\d{2}/\d{2}(/\d{2,4})?', '', description).strip()
                     
                     # Ignore common useless lines
-                    if description.lower() in ["saldo do dia", "saldo anterior", "s a l d o", "total"]:
+                    desc_lower = description.lower()
+                    if desc_lower in ["saldo do dia", "saldo anterior", "s a l d o", "total", "saldo"]:
                         continue
+                        
+                    # Filter out lines that are just a bunch of numbers/currencies
+                    # Example "R$ 0,00 R$ 100,00" -> Description becomes "R$ 0,00"
+                    # Count how many digits vs letters
+                    digits = sum(c.isdigit() for c in description)
+                    letters = sum(c.isalpha() for c in description)
+                    if letters < 3 and digits > 5: # Arbitrary heuristic: if mostly numbers and few letters, it's likely not a valid description
+                         continue
                         
                     data.append({"Descrição": description, "Valor": value_found})
 
