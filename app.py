@@ -2234,21 +2234,14 @@ def render_financial_view():
 def render_chat_view():
     st.markdown("## 💬 Chat Financeiro (IA)")
     
-    # 1. API Key Setup
+    # 1. API Key Setup (Hardcoded as requested)
     if "gemini_api_key" not in st.session_state:
         st.session_state["gemini_api_key"] = "AIzaSyDa48eCwlAmnw0xrFXQZJaNzzH97I5MvPk"
     
-    # We hide the key setup if it's already configured to keep UI clean
-    with st.expander("🔑 Configurar Chave da API (Gemini)", expanded=not st.session_state["gemini_api_key"]):
-        st.info("Para usar o chat, você precisa de uma API Key do Google (é grátis!). Obtenha em: [aistudio.google.com](https://aistudio.google.com/app/apikey)")
-        api_key = st.text_input("Cole sua API Key aqui:", value=st.session_state["gemini_api_key"], type="password")
-        if st.button("Salvar Chave", key="save_api_key"): # Added unique key just in case
-            st.session_state["gemini_api_key"] = api_key
-            st.success("Chave salva!")
-            st.rerun()
-
+    # API Key Configuration REMOVED to show chat directly
+    
     if not st.session_state["gemini_api_key"]:
-        st.warning("⚠️ Por favor, insira sua chave da API acima para começar.")
+        st.warning("⚠️ Chave de API não configurada. Contate o suporte.")
         return
 
     # 2. Context Loading
