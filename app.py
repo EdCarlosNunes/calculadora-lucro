@@ -1813,6 +1813,8 @@ def parse_pdf(uploaded_file):
                     digits = sum(c.isdigit() for c in description)
                     letters = sum(c.isalpha() for c in description)
                     if letters < 3 and digits > 5: # Arbitrary heuristic: if mostly numbers and few letters, it's likely not a valid description
+                         # One exception: "PIX sent" logic might have few letters if it's just a name, but usually names have letters.
+                         # Let's trust the heuristic for now to clean up the "R$ 0,00" garbage.
                          continue
                         
                     data.append({"Descrição": description, "Valor": value_found})
@@ -1907,7 +1909,19 @@ def render_financial_view():
                     except:
                         st.warning("Houve um problema ao converter os valores para número. Verifique se estão no formato correto (ex: 1200,50).")
 
-                    # Categorization Logic
+                    # ─── DATA ANALYSIS & PROCESSING ───
+                    
+                    # 1. Separate Income & Expenses
+                    df_income = df[df[val_col] > 0].copy()
+                    df_expense = df[df[val_col] < 0].copy()
+                    
+                    # Convert expenses to positive for visualization/sum where needed, but keep track they are outflows
+                    # actually for the logic of "total spent" we usually sum the absolute value of negatives
+                    total_income = df_income[val_col].sum()
+                    total_expense = df_expense[val_col].abs().sum()
+                    balance = total_income - total_expense
+                    
+                    # 2. Categorization (Focus on Expenses)
                     def categorize(desc):
                         desc = str(desc).lower()
                         if any(x in desc for x in ['facebook', 'google', 'ads', 'anuncio', 'marketing', 'propaganda']):
@@ -1916,49 +1930,107 @@ def render_financial_view():
                             return 'Transporte/Logística'
                         if any(x in desc for x in ['aws', 'host', 'site', 'software', 'ferramenta', 'adobe', 'chatgpt', 'openai']):
                             return 'Software/Serviços'
-                        if any(x in desc for x in ['imposto', 'das', 'darf', 'inss', 'simples', 'guia']):
+                        if any(x in desc for x in ['imposto', 'das', 'darf', 'inss', 'simples', 'guia', 'tributo']):
                             return 'Impostos'
                         if any(x in desc for x in ['ifood', 'restaurante', 'cafe', 'almoco', 'jantar', 'mercado']):
                             return 'Alimentação'
-                        if any(x in desc for x in ['salario', 'prolabore', 'funcionario', 'pagamento']):
+                        if any(x in desc for x in ['salario', 'prolabore', 'funcionario', 'pagamento', 'folha']):
                             return 'Pessoal'
                         return 'Outros'
 
-                    df['Categoria'] = df[desc_col].apply(categorize)
+                    df_expense['Categoria'] = df_expense[desc_col].apply(categorize)
+                    df_income['Categoria'] = 'Entrada' # Simple categorization for income
                     
-                    # Aggregations
-                    total_spent = df[val_col].sum()
-                    biggest_idx = df[val_col].idxmax()
-                    biggest_name = df.loc[biggest_idx, desc_col]
-                    biggest_val = df.loc[biggest_idx, val_col]
+                    # Aggregations for Expenses
+                    category_totals = df_expense.groupby('Categoria')[val_col].abs().sum().reset_index().sort_values(by=val_col, ascending=False)
                     
-                    category_totals = df.groupby('Categoria')[val_col].sum().reset_index()
-                    
-                    # Display Results
+                    # Find Biggest Expense
+                    if not df_expense.empty:
+                        biggest_expense_row = df_expense.loc[df_expense[val_col].idxmin()] # min because it's negative
+                        biggest_expense_name = biggest_expense_row[desc_col]
+                        biggest_expense_val = abs(biggest_expense_row[val_col])
+                    else:
+                        biggest_expense_name = "N/A"
+                        biggest_expense_val = 0
+
+                    # ─── ANALYST NARRATIVE GENERATION ───
                     st.divider()
-                    st.subheader("📊 Relatório Financeiro (Local)")
+                    st.subheader("🤖 Analista Financeiro Virtual")
                     
-                    kpi1, kpi2 = st.columns(2)
-                    with kpi1:
-                        st.metric("Total Gasto", f"R$ {total_spent:,.2f}")
-                    with kpi2:
-                        st.metric("Maior Despesa", f"{biggest_name}", f"R$ {biggest_val:,.2f}")
-                        
-                    # Charts
-                    # Charts
+                    # Determine Financial Health
+                    if balance > 0:
+                        health_status = "Positivo ✅"
+                        health_msg = f"Parabéns! Você fechou com um saldo positivo de **R$ {balance:,.2f}**. Isso indica uma boa saúde financeira neste período."
+                    elif balance < 0:
+                        health_status = "Negativo ⚠️"
+                        health_msg = f"Atenção! Suas despesas superaram suas receitas em **R$ {abs(balance):,.2f}**. É importante rever gastos não essenciais."
+                    else:
+                        health_status = "Neutro ⚖️"
+                        health_msg = "Você fechou exatamente no zero a zero."
+
+                    # Dynamic Text
+                    analysis_text = f"""
+                    > **Resumo Geral:**
+                    > Neste período, houve uma entrada total de **R$ {total_income:,.2f}** e saídas no total de **R$ {total_expense:,.2f}**.
+                    > O resultado final foi **{health_status}**.
+                    >
+                    > {health_msg}
+                    >
+                    > **Destaque de Gastos:**
+                    > A sua maior despesa única foi com **"{biggest_expense_name}"**, no valor de **R$ {biggest_expense_val:,.2f}**.
+                    > No total, a categoria que mais pesou no bolso foi **{category_totals.iloc[0]['Categoria'] if not category_totals.empty else 'N/A'}**.
+                    """
+                    st.markdown(analysis_text)
+                    
+                    # ─── KPI CARDS ───
+                    k1, k2, k3 = st.columns(3)
+                    k1.metric("💰 Receitas", f"R$ {total_income:,.2f}", delta_color="normal")
+                    k2.metric("💸 Despesas", f"R$ {total_expense:,.2f}", delta="-"+f"R$ {total_expense:,.2f}", delta_color="inverse")
+                    k3.metric("⚖️ Saldo Final", f"R$ {balance:,.2f}", delta=f"{balance:,.2f}")
+
+                    # ─── CHARTS (Expenses) ───
                     if not category_totals.empty:
-                        # Bar Chart as requested
-                        st.subheader("Gráfico de Gastos (Barra)")
-                        fig = px.bar(category_totals, x="Categoria", y=val_col, text_auto='.2s', color="Categoria", title="Gastos por Categoria (R$)")
-                        fig.update_layout(showlegend=False, **CHART_LAYOUT)
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        st.write("### Detalhamento por Categoria")
-                        # Format column to currency
-                        st.dataframe(category_totals.style.format({val_col: "R$ {:,.2f}"}), use_container_width=True)
-                        
-                    with st.expander("Ver Tabela Completa Classificada"):
-                        st.dataframe(df, use_container_width=True)
+                         st.divider()
+                         st.subheader("📉 Análise de Despesas")
+                         
+                         c_chart, c_table = st.columns([2, 1])
+                         
+                         with c_chart:
+                            fig = px.bar(category_totals, x="Categoria", y=val_col, text_auto='.2s', color="Categoria", title="Gastos por Categoria")
+                            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Valor (R$)")
+                            st.plotly_chart(fig, use_container_width=True)
+                         
+                         with c_table:
+                             st.write("**Top Categorias**")
+                             st.dataframe(category_totals.style.format({val_col: "R$ {:,.2f}"}), use_container_width=True, hide_index=True)
+
+                    # ─── DETAILED TABLES (TABS) ───
+                    st.divider()
+                    st.subheader("📋 Extrato Detalhado")
+                    
+                    tab_in, tab_out = st.tabs(["🟢 Entradas (Receitas)", "🔴 Saídas (Despesas)"])
+                    
+                    with tab_in:
+                        if not df_income.empty:
+                            st.dataframe(
+                                df_income[[desc_col, val_col]].rename(columns={desc_col: "Descrição", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        else:
+                            st.info("Nenhuma entrada registrada neste período.")
+                            
+                    with tab_out:
+                        if not df_expense.empty:
+                            # Show category too
+                            st.dataframe(
+                                df_expense[[desc_col, 'Categoria', val_col]].rename(columns={desc_col: "Descrição", val_col: "Valor"}).sort_values(by="Valor", ascending=True).style.format({"Valor": "R$ {:,.2f}"}),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        else:
+                            st.info("Nenhuma despesa registrada neste período.")
+
                         
         except Exception as e:
             st.error(f"Erro ao processar arquivo: {e}")
