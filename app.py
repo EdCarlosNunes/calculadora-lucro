@@ -1942,7 +1942,8 @@ def render_financial_view():
                     df_income['Categoria'] = 'Entrada' # Simple categorization for income
                     
                     # Aggregations for Expenses
-                    category_totals = df_expense.groupby('Categoria')[val_col].abs().sum().reset_index().sort_values(by=val_col, ascending=False)
+                    # Fix: groupby().sum() returns a Series, then we use abs()
+                    category_totals = df_expense.groupby('Categoria')[val_col].sum().abs().reset_index().sort_values(by=val_col, ascending=False)
                     
                     # Find Biggest Expense
                     if not df_expense.empty:
