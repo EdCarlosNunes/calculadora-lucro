@@ -1093,84 +1093,102 @@ def tab_mercado_livre(fixed: dict, product_name: str):
     col1, col2 = st.columns([1, 1], gap="large")
 
     with col1:
-        st.markdown(
-            '<div class="section-title">🟡 Dados do Produto</div>',
-            unsafe_allow_html=True,
-        )
-        a1, a2 = st.columns(2)
-        with a1:
-            cost = st.number_input(
-                "Custo do Produto (R$)",
-                min_value=0.0,
-                value=50.0,
-                step=1.0,
-                format="%.2f",
-                key="ml_cost",
-                help="Quanto você pagou para comprar ou produzir o produto.",
-            )
-        with a2:
-            extra_cost = st.number_input(
-                "Custo Extra (R$)",
-                min_value=0.0,
-                value=0.0,
-                step=0.5,
-                format="%.2f",
-                key="ml_extra",
-                help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
-            )
+        # ─────────────────────────────────────────────────────────────
+        # 1. DADOS DO PRODUTO
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("📦 Dados do Produto", expanded=True):
+            col_prod1, col_prod2 = st.columns(2)
+            with col_prod1:
+                cost = st.number_input(
+                    "Preço de Custo (R$)",
+                    min_value=0.0,
+                    value=50.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="ml_cost",
+                    help="Quanto você pagou para comprar ou produzir o produto.",
+                )
+            with col_prod2:
+                # We need to get the category keys based on a default or current selection.
+                # However, category depends on ad_type. 
+                # To avoid refreshing issues, we can put ad_type here or keep category generic?
+                # The prompt asks for: "Dados do Produto: (Preço de Custo, Categoria, Peso/Dimensões)"
+                # But Category in ML depends on Ad Type (Classic/Premium) for the *rate*.
+                # Actually, the dict `MERCADO_LIVRE["ad_types"]` keys are the Ad Types.
+                # The *categories* are the keys inside that. They are the same for both ad types in the dict structure (mostly).
+                # Let's check the dict structure again.
+                # Yes, "Clássico" and "Premium" have the same keys.
+                # So we can list categories from one of them.
+                categories_list = list(MERCADO_LIVRE["ad_types"]["Clássico"].keys())
+                category = st.selectbox(
+                    "Categoria",
+                    categories_list,
+                    key="ml_category",
+                    help="Escolha a categoria correta, pois a comissão do Mercado Livre muda dependendo dela.",
+                )
 
-        b1, b2 = st.columns(2)
-        with b1:
-            ad_type = st.selectbox(
-                "Tipo de Anúncio",
-                list(MERCADO_LIVRE["ad_types"].keys()),
-                key="ml_ad_type",
-                help="Clássico tem taxa menor mas menos exposição. Premium tem taxa maior mas parcela sem juros.",
-            )
-        with b2:
-            category = st.selectbox(
-                "Categoria",
-                list(MERCADO_LIVRE["ad_types"][ad_type].keys()),
-                key="ml_category",
-                help="Escolha a categoria correta, pois a comissão do Mercado Livre muda dependendo dela.",
-            )
+        # ─────────────────────────────────────────────────────────────
+        # 2. CONFIGURAÇÃO DA VENDA
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("🛒 Configuração da Venda", expanded=True):
+            col_sale1, col_sale2 = st.columns(2)
+            with col_sale1:
+                ad_type = st.selectbox(
+                    "Tipo de Anúncio",
+                    list(MERCADO_LIVRE["ad_types"].keys()),
+                    key="ml_ad_type",
+                    help="Clássico tem taxa menor mas menos exposição. Premium tem taxa maior mas parcela sem juros.",
+                )
+            with col_sale2:
+                desired_margin = st.number_input(
+                    "Margem Desejada (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=20.0,
+                    step=1.0,
+                    format="%.1f",
+                    key="ml_desired_margin",
+                    help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
+                )
 
-        c1, c2 = st.columns(2)
-        with c1:
-            shipping = st.number_input(
-                "Frete do Vendedor (R$)",
-                min_value=0.0,
-                value=20.0,
-                step=1.0,
-                format="%.2f",
-                key="ml_shipping",
-                help="Se o produto for acima de R$79, você paga uma parte do frete. Coloque esse valor aqui."
-            )
-        with c2:
-            tax_pct = st.number_input(
-                "Imposto (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=4.0,
-                step=0.5,
-                format="%.1f",
-                key="ml_tax",
-                help="Imposto que você paga sobre o valor total da venda (ex: DAS do Simples Nacional). Se for MEI, deixe 0.",
-            )
-            
-        st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
-        d1, _ = st.columns([1, 1])
-        with d1:
-            desired_margin = st.number_input(
-                "Margem Desejada (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=20.0,
-                step=1.0,
-                format="%.1f",
-                key="ml_desired_margin",
-                help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
-            )
+            col_sale3, _ = st.columns(2)
+            with col_sale3:
+                shipping = st.number_input(
+                    "Frete do Vendedor (R$)",
+                    min_value=0.0,
+                    value=20.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="ml_shipping",
+                    help="Se o produto for acima de R$79, você paga uma parte do frete. Coloque esse valor aqui."
+                )
+
+        # ─────────────────────────────────────────────────────────────
+        # 3. IMPOSTOS E CUSTOS EXTRAS
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("🧾 Impostos e Custos Extras", expanded=False):
+            col_tax1, col_tax2 = st.columns(2)
+            with col_tax1:
+                tax_pct = st.number_input(
+                    "Imposto / Nota Fiscal (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=4.0,
+                    step=0.1,
+                    format="%.1f",
+                    key="ml_tax",
+                    help="Imposto sobre a nota fiscal (ex: DAS).",
+                )
+            with col_tax2:
+                 extra_cost = st.number_input(
+                    "Custo Extra / Embalagem (R$)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="ml_extra",
+                    help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
+                )
 
     result_no_fixed = calculate_mercado_livre(
         cost, ad_type, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
@@ -1204,101 +1222,107 @@ def tab_amazon(fixed: dict, product_name: str):
     col1, col2 = st.columns([1, 1], gap="large")
 
     with col1:
-        st.markdown(
-            '<div class="section-title">📦 Dados do Produto</div>',
-            unsafe_allow_html=True,
-        )
-        a1, a2 = st.columns(2)
-        with a1:
-            cost = st.number_input(
-                "Custo do Produto (R$)",
-                min_value=0.0,
-                value=50.0,
-                step=1.0,
-                format="%.2f",
-                key="amz_cost",
-                help="Quanto você pagou para comprar ou produzir o produto.",
-            )
-        with a2:
-            extra_cost = st.number_input(
-                "Custo Extra (R$)",
-                min_value=0.0,
-                value=0.0,
-                step=0.5,
-                format="%.2f",
-                key="amz_extra",
-                help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
-            )
-
-        b1, b2 = st.columns(2)
-        with b1:
-            logistics_display = st.selectbox(
-                "Logística",
-                list(AMAZON["logistics"].keys()),
-                key="amz_logistics",
-                help="DBA: A Amazon ou parceiro entrega (taxas diferentes). FBM: Você envia pelos Correios/Transportadora.",
-            )
-            logistics = AMAZON["logistics"][logistics_display]
-        with b2:
-            category = st.selectbox(
-                "Categoria",
-                list(AMAZON["categories"].keys()),
-                key="amz_category",
-                help="A comissão da Amazon varia conforme a categoria do produto.",
-            )
-
-        # Conditional Inputs
-        c1, c2 = st.columns(2)
-        weight_g = 0.0
-        shipping_cost = 0.0
-        
-        if logistics == "dba":
-            with c1:
-                weight_g = st.number_input(
-                    "Peso (gramas)",
+        # ─────────────────────────────────────────────────────────────
+        # 1. DADOS DO PRODUTO
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("📦 Dados do Produto", expanded=True):
+            col_prod1, col_prod2 = st.columns(2)
+            with col_prod1:
+                cost = st.number_input(
+                    "Preço de Custo (R$)",
                     min_value=0.0,
-                    value=300.0,
-                    step=50.0,
-                    key="amz_weight",
-                    help="Peso do produto embalado. No DBA, o peso define a tarifa de envio.",
+                    value=50.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="amz_cost",
+                    help="Quanto você pagou para comprar ou produzir o produto.",
                 )
-        else:
-            with c1:
-                shipping_cost = st.number_input(
-                    "Frete do Vendedor (R$)",
+            with col_prod2:
+                category = st.selectbox(
+                    "Categoria",
+                    list(AMAZON["categories"].keys()),
+                    key="amz_category",
+                    help="A comissão da Amazon varia conforme a categoria do produto.",
+                )
+
+        # ─────────────────────────────────────────────────────────────
+        # 2. CONFIGURAÇÃO DA VENDA
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("🛒 Configuração da Venda", expanded=True):
+            col_sale1, col_sale2 = st.columns(2)
+            with col_sale1:
+                logistics_display = st.selectbox(
+                    "Logística",
+                    list(AMAZON["logistics"].keys()),
+                    key="amz_logistics",
+                    help="DBA: A Amazon ou parceiro entrega. FBM: Você envia.",
+                )
+                logistics = AMAZON["logistics"][logistics_display]
+            with col_sale2:
+                desired_margin = st.number_input(
+                    "Margem Desejada (%)",
                     min_value=0.0,
+                    max_value=100.0,
                     value=20.0,
                     step=1.0,
-                    format="%.2f",
-                    key="amz_shipping",
-                    help="Quanto você paga nos Correios/Transportadora para enviar o pedido.",
+                    format="%.1f",
+                    key="amz_desired_margin",
+                    help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
                 )
-        
-        with c2:
-            tax_pct = st.number_input(
-                "Imposto (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=4.0, 
-                step=0.5,
-                format="%.1f",
-                key="amz_tax",
-                help="Imposto sobre a nota fiscal (ex: Simples Nacional). Se for MEI, deixe 0.",
-            )
+
+            # Dynamic fields based on logistics
+            col_sale3, col_sale4 = st.columns(2)
+            weight_g = 0.0
+            shipping_cost = 0.0
             
-        st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
-        d1, _ = st.columns([1, 1])
-        with d1:
-            desired_margin = st.number_input(
-                "Margem Desejada (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=20.0,
-                step=1.0,
-                format="%.1f",
-                key="amz_desired_margin",
-                help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
-            )
+            if logistics == "dba":
+                with col_sale3:
+                    weight_g = st.number_input(
+                        "Peso (gramas)",
+                        min_value=0.0,
+                        value=300.0,
+                        step=50.0,
+                        key="amz_weight",
+                        help="Peso do produto embalado (DBA).",
+                    )
+            else:
+                with col_sale3:
+                    shipping_cost = st.number_input(
+                        "Frete do Vendedor (R$)",
+                        min_value=0.0,
+                        value=20.0,
+                        step=0.01,
+                        format="%.2f",
+                        key="amz_shipping",
+                        help="Quanto você paga nos Correios/Transportadora para enviar.",
+                    )
+
+        # ─────────────────────────────────────────────────────────────
+        # 3. IMPOSTOS E CUSTOS EXTRAS
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("🧾 Impostos e Custos Extras", expanded=False):
+            col_tax1, col_tax2 = st.columns(2)
+            with col_tax1:
+                tax_pct = st.number_input(
+                    "Imposto / Nota Fiscal (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=4.0, 
+                    step=0.1,
+                    format="%.1f",
+                    key="amz_tax",
+                    help="Imposto sobre a nota fiscal (ex: Simples Nacional).",
+                )
+            with col_tax2:
+                extra_cost = st.number_input(
+                    "Custo Extra / Embalagem (R$)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="amz_extra",
+                    help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
+                )
 
     result_no_fixed = calculate_amazon(
         cost, logistics, category, extra_cost, shipping_cost, weight_g, tax_pct, 0.0, desired_margin, 0.0
@@ -1332,92 +1356,100 @@ def tab_shopee(fixed: dict, product_name: str):
     col1, col2 = st.columns([1, 1], gap="large")
 
     with col1:
-        st.markdown(
-            '<div class="section-title">🟠 Dados do Produto</div>',
-            unsafe_allow_html=True,
-        )
-        a1, a2 = st.columns(2)
-        with a1:
-            cost = st.number_input(
-                "Custo do Produto (R$)",
-                min_value=0.0,
-                value=50.0,
-                step=1.0,
-                format="%.2f",
-                key="sp_cost",
-                help="Quanto você pagou para comprar ou produzir o produto.",
-            )
-        with a2:
-            extra_cost = st.number_input(
-                "Custo Extra (R$)",
-                min_value=0.0,
-                value=0.0,
-                step=0.5,
-                format="%.2f",
-                key="sp_extra",
-                help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
-            )
+        # ─────────────────────────────────────────────────────────────
+        # 1. DADOS DO PRODUTO
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("📦 Dados do Produto", expanded=True):
+            col_prod1, col_prod2 = st.columns(2)
+            with col_prod1:
+                cost = st.number_input(
+                    "Preço de Custo (R$)",
+                    min_value=0.0,
+                    value=50.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="sp_cost",
+                    help="Quanto você pagou para comprar ou produzir o produto.",
+                )
+            with col_prod2:
+                category = st.selectbox(
+                    "Categoria",
+                    list(SHOPEE["categories"].keys()),
+                    key="sp_category",
+                    help="Escolha a categoria para o cálculo das taxas.",
+                )
 
-        b1, b2 = st.columns(2)
-        with b1:
-            category = st.selectbox(
-                "Categoria",
-                list(SHOPEE["categories"].keys()),
-                key="sp_category",
-                help="Escolha a categoria para o cálculo das taxas.",
-            )
-        with b2:
-            seller_type = st.radio(
-                "Tipo de Vendedor",
-                ["CPF", "CNPJ"],
-                horizontal=True,
-                key="sp_seller",
-                help="Taxa extra de R$3 se for CPF e vender mais de R$900/mês (estimado).",
-            )
+        # ─────────────────────────────────────────────────────────────
+        # 2. CONFIGURAÇÃO DA VENDA
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("🛒 Configuração da Venda", expanded=True):
+            col_sale1, col_sale2 = st.columns(2)
+            with col_sale1:
+                seller_type = st.radio(
+                    "Tipo de Vendedor",
+                    ["CPF", "CNPJ"],
+                    horizontal=True,
+                    key="sp_seller",
+                    help="Taxa extra de R$3 se for CPF e vender mais de R$900/mês (estimado).",
+                )
+            with col_sale2:
+                desired_margin = st.number_input(
+                    "Margem Desejada (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=20.0,
+                    step=1.0,
+                    format="%.1f",
+                    key="sp_desired_margin",
+                    help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
+                )
 
-        free_shipping = st.checkbox(
-            "Programa Frete Grátis (+6%)",
-            value=True, # Default to true as it's very common
-            key="sp_free_ship",
-            help="Marque se você participa do programa de Frete Grátis Extra (cobra comissão maior).",
-        )
+            col_sale3, col_sale4 = st.columns(2)
+            with col_sale3:
+                shipping = st.number_input(
+                    "Frete do Vendedor (R$)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="sp_shipping",
+                    help="Coloque aqui se você paga alguma parte do frete para a Shopee."
+                )
+            with col_sale4:
+                st.write("") # Spacer
+                free_shipping = st.checkbox(
+                    "Programa Frete Grátis (+6%)",
+                    value=True,
+                    key="sp_free_ship",
+                    help="Marque se você participa do programa de Frete Grátis Extra.",
+                )
 
-        c1, c2 = st.columns(2)
-        with c1:
-            shipping = st.number_input(
-                "Frete do Vendedor (R$)",
-                min_value=0.0,
-                value=0.0,
-                step=1.0,
-                format="%.2f",
-                key="sp_shipping",
-                help="Coloque aqui se você paga alguma parte do frete para a Shopee."
-            )
-        with c2:
-            tax_pct = st.number_input(
-                "Imposto (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=4.0,
-                step=0.5,
-                format="%.1f",
-                key="sp_tax",
-                help="Imposto sobre a nota fiscal (ex: Simples Nacional). Se for MEI, deixe 0.",
-            )
-            
-        st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
-        d1, _ = st.columns([1, 1])
-        with d1:
-            desired_margin = st.number_input(
-                "Margem Desejada (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=20.0,
-                step=1.0,
-                format="%.1f",
-                key="sp_desired_margin",
-                help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
-            )
+        # ─────────────────────────────────────────────────────────────
+        # 3. IMPOSTOS E CUSTOS EXTRAS
+        # ─────────────────────────────────────────────────────────────
+        with st.expander("🧾 Impostos e Custos Extras", expanded=False):
+            col_tax1, col_tax2 = st.columns(2)
+            with col_tax1:
+                tax_pct = st.number_input(
+                    "Imposto / Nota Fiscal (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=4.0,
+                    step=0.1,
+                    format="%.1f",
+                    key="sp_tax",
+                    help="Imposto sobre a nota fiscal (ex: Simples Nacional).",
+                )
+            with col_tax2:
+                extra_cost = st.number_input(
+                    "Custo Extra / Embalagem (R$)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.01,
+                    format="%.2f",
+                    key="sp_extra",
+                    help="Gastos a mais por venda: Embalagem, fita, etiqueta, brinde, etc.",
+                )
 
     result_no_fixed = calculate_shopee(
         cost, category, seller_type, free_shipping, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
