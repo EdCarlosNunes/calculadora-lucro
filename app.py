@@ -774,19 +774,31 @@ def inject_css():
         }
 
         /* ── Custom result cards ──────────────── */
+        /* Remove top padding from Streamlit content and hide header */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 5rem !important;
+        }
+        header[data-testid="stHeader"] {
+            display: none;
+        }
+        
         /* Navbar */
         .navbar {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); /* Light Gray */
             padding: 15px 25px;
-            border-radius: 12px;
+            border-radius: 0 0 12px 12px; /* Rounded only at bottom */
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
             color: #343a40; /* Dark Gray/Black for contrast */
             margin-bottom: 25px;
+            margin-top: -1rem; /* Pull up to cover any remaining gap if standard padding persists */
             display: flex;
             align-items: center;
             justify-content: flex-start; /* Left align */
             gap: 15px;
-            border: 1px solid #dee2e6; /* Gray border */
+            border-bottom: 1px solid #dee2e6; /* Gray border bottom only */
+            border-left: 1px solid #dee2e6;
+            border-right: 1px solid #dee2e6;
         }
         .navbar-logo {
             font-size: 28px;
