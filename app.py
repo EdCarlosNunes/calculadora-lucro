@@ -2083,6 +2083,42 @@ def render_financial_view():
                              st.write("**Maiores Gastos**")
                              st.dataframe(top_expenses[[desc_col, val_col]].rename(columns={desc_col: "Item", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}), use_container_width=True, hide_index=True)
 
+                    # ─── DISTRIBUTION CHART (No Pie Chart) ───
+                    st.divider()
+                    st.subheader("📊 Destinação da Receita")
+                    
+                    if total_income > 0:
+                        # Prepare data for distribution
+                        dist_data = [
+                            {"Tipo": "Despesas", "Valor": total_expense, "Cor": "#EF553B"}, # Red
+                            {"Tipo": "Investimentos", "Valor": total_invested, "Cor": "#00CC96"}, # Green
+                            {"Tipo": "Saldo em Caixa", "Valor": liquid_balance if liquid_balance > 0 else 0, "Cor": "#636EFA"} # Blue
+                        ]
+                        df_dist = pd.DataFrame(dist_data)
+                        df_dist["Porcentagem"] = (df_dist["Valor"] / total_income) * 100
+                        
+                        # Fix potential negative balance visualization
+                        df_dist["Valor_Visual"] = df_dist["Valor"].apply(lambda x: max(0, x))
+
+                        fig_dist = px.bar(
+                            df_dist, 
+                            x="Tipo", 
+                            y="Valor", # Use real value
+                            color="Tipo",
+                            text_auto='.2s',
+                            color_discrete_map={"Despesas": "#EF553B", "Investimentos": "#00CC96", "Saldo em Caixa": "#636EFA"},
+                            title="Para onde foi o seu dinheiro?"
+                        )
+                        # Add custom text with %
+                        fig_dist.update_traces(
+                            texttemplate='%{y:,.2f}<br>(%{customdata:.1f}%)', 
+                            customdata=df_dist["Porcentagem"]
+                        )
+                        fig_dist.update_layout(showlegend=False, yaxis_title="Valor (R$)", xaxis_title=None)
+                        st.plotly_chart(fig_dist, use_container_width=True)
+                    else:
+                        st.info("Sem receitas para calcular distribuição.")
+
                     # ─── DETAILED TABLES (TABS) ───
                     st.divider()
                     st.subheader("📋 Extrato Detalhado")
@@ -2092,7 +2128,7 @@ def render_financial_view():
                     with tab_in:
                         if not df_income.empty:
                             st.dataframe(
-                                df_income[[desc_col, val_col]].rename(columns={desc_col: "Descrição", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}),
+                                df_income[[date_col, desc_col, val_col]].rename(columns={date_col: "Data", desc_col: "Descrição", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}),
                                 use_container_width=True,
                                 hide_index=True
                             )
@@ -2102,7 +2138,7 @@ def render_financial_view():
                     with tab_out:
                         if not df_expense.empty:
                             st.dataframe(
-                                df_expense[[desc_col, 'Categoria', val_col]].rename(columns={desc_col: "Descrição", val_col: "Valor"}).sort_values(by="Valor", ascending=True).style.format({"Valor": "R$ {:,.2f}"}),
+                                df_expense[[date_col, desc_col, 'Categoria', val_col]].rename(columns={date_col: "Data", desc_col: "Descrição", val_col: "Valor"}).sort_values(by="Valor", ascending=True).style.format({"Valor": "R$ {:,.2f}"}),
                                 use_container_width=True,
                                 hide_index=True
                             )
@@ -2113,7 +2149,7 @@ def render_financial_view():
                          if not df_investment.empty:
                             st.success(f"Total Investido: R$ {total_invested:,.2f}")
                             st.dataframe(
-                                df_investment[[desc_col, val_col]].rename(columns={desc_col: "Descrição", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}),
+                                df_investment[[date_col, desc_col, val_col]].rename(columns={date_col: "Data", desc_col: "Descrição", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}),
                                 use_container_width=True,
                                 hide_index=True
                             )
