@@ -2005,20 +2005,27 @@ def render_financial_view():
                         inv_msg = f"🚀 **Parabéns!** Você investiu **R$ {total_invested:,.2f}** neste período. Isso é construção de patrimônio, não gasto!"
 
                     # Dynamic Text
-                    analysis_text = f"""
-                    > **Resumo do Analista:**
-                    > Receitas: **R$ {total_income:,.2f}**
-                    > Despesas Reais: **R$ {total_expense:,.2f}**
-                    > Investimentos: **R$ {total_invested:,.2f}**
-                    >
-                    > {health_msg}
-                    > {inv_msg}
-                    >
-                    > **Raio-X das Despesas:**
-                    > Maior gasto único: **"{biggest_expense_name}"** (R$ {biggest_expense_val:,.2f}).
-                    > Categoria mais pesada: **{category_totals.iloc[0]['Categoria'] if not category_totals.empty else 'N/A'}**.
-                    """
-                    st.markdown(analysis_text)
+                    with st.container(border=True):
+                        st.markdown(f"### 🤖 Resumo do Analista")
+                        st.markdown(f"**Receitas:** R$ {total_income:,.2f}")
+                        st.markdown(f"**Despesas Reais:** R$ {total_expense:,.2f}")
+                        st.markdown(f"**Investimentos:** R$ {total_invested:,.2f}")
+                        
+                        st.divider()
+                        
+                        if health_status == "Positivo ✅":
+                             st.success(health_msg)
+                        elif health_status == "Negativo ⚠️":
+                             st.error(health_msg)
+                        else:
+                             st.info(health_msg)
+
+                        if inv_msg:
+                            st.info(inv_msg)
+                            
+                        st.markdown("#### 🔎 Raio-X das Despesas")
+                        st.markdown(f"- **Maior gasto único:** {biggest_expense_name} (R$ {biggest_expense_val:,.2f})")
+                        st.markdown(f"- **Categoria mais pesada:** {category_totals.iloc[0]['Categoria'] if not category_totals.empty else 'N/A'}")
                     
                     # ─── KPI CARDS ───
                     k1, k2, k3, k4 = st.columns(4)
