@@ -2263,8 +2263,10 @@ def render_chat_view():
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
         
-        /* Flex direction for User messages to push them to the right */
-        [data-testid="stChatMessage"]:has(div[aria-label="user"]) {
+        /* Flex direction for User messages to push them to the right 
+           Targeting the parent stChatMessage that contains our hidden marker .user-message-marker
+        */
+        [data-testid="stChatMessage"]:has(.user-message-marker) {
             flex-direction: row-reverse;
             text-align: right;
             background-color: #e3f2fd; /* Light Blue for User */
@@ -2272,13 +2274,13 @@ def render_chat_view():
         }
         
         /* Align content inside user message to right */
-        [data-testid="stChatMessage"]:has(div[aria-label="user"]) > div {
+        [data-testid="stChatMessage"]:has(.user-message-marker) > div {
             text-align: right !important;
             justify-content: flex-end !important;
         }
         
-        /* AI Message Styling */
-        [data-testid="stChatMessage"]:has(div[aria-label="assistant"]) {
+        /* AI Message Styling (No marker) */
+        [data-testid="stChatMessage"]:not(:has(.user-message-marker)) {
             background-color: #f8f9fa; /* Light Gray for AI */
             border: 1px solid #e9ecef;
         }
@@ -2292,20 +2294,24 @@ def render_chat_view():
 
     for message in st.session_state["messages"]:
         with st.chat_message(message["role"]):
+            if message["role"] == "user":
+                # Inject hidden marker for CSS targeting
+                st.markdown('<div class="user-message-marker" style="display:none;"></div>', unsafe_allow_html=True)
             st.markdown(message["content"])
 
     if prompt := st.chat_input("Pergunte sobre finanças (investimentos, segurança, ou seus gastos se carregou dados)"):
         # Display user message
         st.session_state["messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
+            st.markdown('<div class="user-message-marker" style="display:none;"></div>', unsafe_allow_html=True)
             st.markdown(prompt)
 
         # Generate Answer
         with st.chat_message("assistant"):
             try:
                 genai.configure(api_key=st.session_state["gemini_api_key"])
-                # Updated model to Flash (faster/newer) to fix 404 error
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                # Updated model to 2.0-flash (verified available via script)
+                model = genai.GenerativeModel('gemini-2.0-flash')
                 
                 # Context Building
                 data_summary = "Nenhum dado pessoal carregado. Responda como um consultor financeiro geral."
