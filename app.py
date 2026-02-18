@@ -5,6 +5,8 @@ import pandas as pd
 import time
 
 import os
+import pdfplumber
+import re
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -1718,17 +1720,92 @@ def render_calculator_view(product_name: str):
 
 
 
+def parse_pdf(uploaded_file):
+    """Parses a PDF file and returns a DataFrame with Description and Value."""
+    data = []
+    with pdfplumber.open(uploaded_file) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if not text:
+                continue
+            
+            lines = text.split('\n')
+            for line in lines:
+                # Heuristic: Find lines that end with a number (Value)
+                # Regex looks for common currency formats at the end of parts of the line
+                # It tries to find the last valid money pattern in the line
+                # Matches: 1.200,50 | 1200.50 | 50,00 | -50,00
+                
+                # Strategy: Split line by spaces, look from end for a value
+                parts = line.split()
+                if not parts:
+                    continue
+                
+                # Check the last few parts for a value
+                value_found = None
+                desc_parts = []
+                
+                # Traverse backwards to find the value
+                for i in range(len(parts) - 1, -1, -1):
+                    part = parts[i]
+                    # Clean part to check if float
+                    clean_part = part.replace('R$', '').replace('.', '').replace(',', '.')
+                    # Handle negative numbers
+                    if clean_part.startswith('-'):
+                        clean_part = clean_part[1:]
+                        
+                    if clean_part.replace('.', '', 1).isdigit():
+                        # Found a number!
+                        try:
+                             # Re-parse logic to handle PT-BR format (1.000,00) or US (1,000.00)
+                             val_str = part.replace('R$', '')
+                             # Check if it looks like PT-BR: comma at end (-3 position) or dot inside
+                             if ',' in val_str and val_str.rfind(',') > val_str.rfind('.'):
+                                  val_float = float(val_str.replace('.', '').replace(',', '.'))
+                             else:
+                                  val_float = float(val_str.replace(',', ''))
+                                  
+                             value_found = val_float
+                             # Description is everything before this part
+                             desc_parts = parts[:i]
+                             break
+                        except:
+                             continue
+                
+                if value_found is not None and desc_parts:
+                    description = " ".join(desc_parts)
+                    # Cleanup dates from start of description (e.g., "12/05/2024 Uber...")
+                    # Regex for date: \d{2}/\d{2} or \d{2}/\d{2}/\d{4}
+                    description = re.sub(r'^\s*\d{2}/\d{2}(/\d{2,4})?\s+', '', description)
+                    
+                    data.append({"Descrição": description, "Valor": value_found})
+
+    if not data:
+        return pd.DataFrame()
+        
+    return pd.DataFrame(data)
+
+
 def render_financial_view():
     st.markdown("## 📂 Organização Financeira")
     st.info("Faça upload de uma planilha (CSV) para análise de gastos com IA.")
 
     # 1. Upload
-    uploaded_file = st.file_uploader("Upload CSV Financeiro", type=["csv"])
+    uploaded_file = st.file_uploader("Upload CSV ou PDF Financeiro", type=["csv", "pdf"])
     
     
     if uploaded_file:
         try:
-            df = pd.read_csv(uploaded_file)
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            elif uploaded_file.name.endswith('.pdf'):
+                with st.spinner("📄 Lendo PDF..."):
+                    df = parse_pdf(uploaded_file)
+                    if df.empty:
+                        st.warning("Não consegui encontrar transações financeiras claras neste PDF.")
+            else:
+                 df = pd.DataFrame() # Should not happen given file_uploader types
+
             st.write("### 🔍 Prévia dos Dados")
             st.dataframe(df.head(), use_container_width=True)
             
