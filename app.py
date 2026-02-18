@@ -1736,6 +1736,22 @@ def parse_pdf(uploaded_file):
             
             lines = text.split('\n')
             for line in lines:
+                line_lower = line.lower()
+                
+                # 1. BLOCKLIST: Ignore headers, footers, and summary lines
+                ignore_terms = [
+                    "saldo", "limite", "período", "visualização", "extrato", 
+                    "lançamentos", "agência", "conta:", "banco", "itaú", 
+                    "uniclass", "total", "s a l d o", "automático", "provisão"
+                ]
+                if any(term in line_lower for term in ignore_terms):
+                    continue
+                
+                # 2. DATE REQUIREMENT: Transactions must have a date (DD/MM)
+                # This filters out random numbers or unrelated text
+                if not re.search(r'\d{2}/\d{2}', line):
+                    continue
+
                 # Heuristic: Find lines that end with a number (Value)
                 # Regex looks for common currency formats at the end of parts of the line
                 # It tries to find the last valid money pattern in the line
@@ -1782,17 +1798,8 @@ def parse_pdf(uploaded_file):
                                  # If it has a dot and it is at the end - 3, likely US.
                                  # But if valid integer, assume integer.
                                  val_float = float(val_str)
-
-                             # Filter out "Agencia/Conta" numbers that might look like money but aren't
-                             # e.g. "7212" -> 7212.0. If description contains "agência", ignore.
                              
-                             # Let's check the rest of the line for "agência" or "conta" keywords
-                             line_lower = line.lower()
-                             if "agência" in line_lower or "conta" in line_lower or "saldo" in line_lower:
-                                  # Only skip if it looks like the header line from the screenshot
-                                  if "banco" in line_lower or "490." in line_lower: 
-                                      continue
-
+                             # We already filtered headers, so if we found a value here, it's likely the transaction amount.
                              value_found = val_float
                              desc_parts = parts[:i]
                              break
@@ -1813,12 +1820,17 @@ def parse_pdf(uploaded_file):
                         
                     # Filter out lines that are just a bunch of numbers/currencies
                     # Example "R$ 0,00 R$ 100,00" -> Description becomes "R$ 0,00"
-                    # Count how many digits vs letters
-                    digits = sum(c.isdigit() for c in description)
-                    letters = sum(c.isalpha() for c in description)
-                    if letters < 3 and digits > 5: # Arbitrary heuristic: if mostly numbers and few letters, it's likely not a valid description
-                         # One exception: "PIX sent" logic might have few letters if it's just a name, but usually names have letters.
-                         # Let's trust the heuristic for now to clean up the "R$ 0,00" garbage.
+                    
+                    # 1. Clean description of R$ and punctuation
+                    desc_clean = re.sub(r'[R$.%,-]', '', description).replace(' ', '')
+                    
+                    # 2. Count letters and digits in CLEAN description
+                    digits = sum(c.isdigit() for c in desc_clean)
+                    letters = sum(c.isalpha() for c in desc_clean)
+                    
+                    # If mostly numbers or very few letters, discard
+                    # Heuristic: < 3 real letters (excluding R$) OR mostly digits
+                    if letters < 3 or (digits > 4 and letters < 5): 
                          continue
                         
                     data.append({"Descrição": description, "Valor": value_found})
