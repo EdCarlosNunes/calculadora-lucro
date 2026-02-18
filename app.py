@@ -1953,74 +1953,9 @@ def render_financial_view():
                     unknowns = df[df['Categoria'] == 'Outros'][desc_col].unique()
                     
                     if DDGS and len(unknowns) > 0:
-                        # Limit to top 15 unique unknowns
-                        unknowns_to_search = unknowns[:15] 
-                        
-                        my_bar = st.progress(0, text="🤖 IA Investigando fornecedores desconhecidos...")
-                        
-                        # Debug container
-                        with st.expander("🕵️‍♂️ Ver Detalhes da Investigação (Debug)", expanded=False):
-                            st.write("Iniciando busca para:", unknowns_to_search)
-
-                            # Cache for this session
-                            if "web_cache" not in st.session_state:
-                                st.session_state["web_cache"] = {}
-                                
-                            for i, item_name in enumerate(unknowns_to_search):
-                                my_bar.progress((i + 1) / len(unknowns_to_search), text=f"🔎 Pesquisando: {item_name}")
-                                
-                                # Check cache first
-                                if item_name in st.session_state["web_cache"] and st.session_state["web_cache"][item_name] is not None:
-                                    new_cat = st.session_state["web_cache"][item_name]
-                                    df.loc[df[desc_col] == item_name, 'Categoria'] = new_cat
-                                    st.write(f"✅ Cache: {item_name} -> {new_cat}")
-                                    continue
-                                
-                                try:
-                                    with DDGS() as ddgs:
-                                        # Search query: Try to be specific
-                                        query = f"{item_name} o que é empresa categoria setor"
-                                        results = list(ddgs.text(query, max_results=2))
-                                        
-                                        found_cat = None
-                                        if results:
-                                            full_text = " ".join([r['body'].lower() for r in results])
-                                            st.caption(f"**{item_name}**: {full_text[:200]}...") # Show snippet
-                                            
-                                            # EXPANDED HEURISTICS
-                                            if any(x in full_text for x in ['prefeitura', 'detran', 'ipva', 'multa', 'tributo', 'gov', 'inss', 'simples nacional', 'receita federal', 'darf', 'imposto', 'fazenda', 'taxa', 'parcelamento', 'veicular', 'licenciamento']):
-                                                found_cat = 'Impostos/Gov'
-                                            elif any(x in full_text for x in ['farmacia', 'drogaria', 'remedio', 'medicamento', 'saude', 'hospital', 'clinica', 'exame']):
-                                                found_cat = 'Saúde'
-                                            elif any(x in full_text for x in ['mercado', 'supermercado', 'atacadista', 'alimentos', 'padaria', 'acougue', 'hortifruti', 'food']):
-                                                found_cat = 'Alimentação'
-                                            elif any(x in full_text for x in ['posto', 'combustivel', 'gasolina', 'auto', 'oficina', 'mecanica', 'automotivo', 'peças', 'pneu']):
-                                                found_cat = 'Transporte'
-                                            elif any(x in full_text for x in ['restaurante', 'lanchonete', 'burger', 'pizza', 'ifood', 'delivery', 'sushi', 'bar', 'churrascaria']):
-                                                found_cat = 'Alimentação'
-                                            elif any(x in full_text for x in ['internet', 'telefonia', 'vivo', 'claro', 'tim', 'oi', 'fibra', 'tv', 'streaming', 'netflix', 'spotify', 'amazon prime']):
-                                                found_cat = 'Serviços/Assinaturas'
-                                            elif any(x in full_text for x in ['loja', 'varejo', 'comercio', 'roupa', 'calcado', 'moda', 'acessorio', 'magazine', 'departamento', 'e-commerce', 'marketplace', 'amazon', 'mercadolivre', 'shopee', 'shein']):
-                                                found_cat = 'Compras'
-                                            elif any(x in full_text for x in ['pagamento', 'processamento', 'maquininha', 'fintech', 'zoop', 'adyen', 'ebanx', 'stone', 'ielo', 'pagseguro']):
-                                                 found_cat = 'Serviços Financeiros'
-                                            elif any(x in full_text for x in ['colchao', 'moveis', 'decoracao', 'casa', 'construcao', 'telhanorte', 'leroy']):
-                                                 found_cat = 'Casa/Conforto'
-                                        
-                                        # Save to cache
-                                        st.session_state["web_cache"][item_name] = found_cat
-                                        
-                                        if found_cat:
-                                            df.loc[df[desc_col] == item_name, 'Categoria'] = found_cat
-                                            st.write(f"🎉 **Descoberto:** {item_name} -> {found_cat}")
-                                        else:
-                                            st.write(f"❌ Não identificado: {item_name}")
-                                        
-                                time.sleep(0.3) 
-                                except Exception as e:
-                                    st.write(f"Erro busca {item_name}: {e}")
-                                
-                        my_bar.empty()
+                        st.info("⚠️ Busca automática na Web desativada temporariamente para correção de erro.")
+                        # TODO: Reimplement safely
+                        pass
 
                     # 2. Separate Groups
                     # Income: > 0
