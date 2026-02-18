@@ -8,6 +8,10 @@ import time
 import os
 import pdfplumber
 import re
+try:
+    from duckduckgo_search import DDGS
+except ImportError:
+    DDGS = None
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -1944,6 +1948,64 @@ def render_financial_view():
 
                     df['Categoria'] = df[desc_col].apply(categorize)
 
+                    # ─── WEB ENRICHMENT (OPTIONAL) ───
+                    cols_enrich = st.columns([3, 1])
+                    do_enrich = cols_enrich[0].checkbox("🌍 Tentar identificar 'Outros' com busca na Web (Mais lento)", value=False)
+                    
+                    if do_enrich and DDGS:
+                        unknowns = df[df['Categoria'] == 'Outros'][desc_col].unique()
+                        if len(unknowns) > 0:
+                            progress_bar = st.progress(0, text="Pesquisando na web...")
+                            
+                            # Cache for this session
+                            if "web_cache" not in st.session_state:
+                                st.session_state["web_cache"] = {}
+                                
+                            for i, item_name in enumerate(unknowns):
+                                progress_bar.progress((i + 1) / len(unknowns), text=f"Pesquisando: {item_name}")
+                                
+                                # Check cache first
+                                if item_name in st.session_state["web_cache"]:
+                                    new_cat = st.session_state["web_cache"][item_name]
+                                    if new_cat:
+                                        df.loc[df[desc_col] == item_name, 'Categoria'] = new_cat
+                                    continue
+                                
+                                try:
+                                    with DDGS() as ddgs:
+                                        # Search query: "O que é [Nome] empresa" or "[Nome] cnpj atividade"
+                                        query = f"{item_name} o que é empresa categoria"
+                                        results = list(ddgs.text(query, max_results=3))
+                                        
+                                        found_cat = None
+                                        full_text = " ".join([r['body'].lower() for r in results])
+                                        
+                                        # Heuristics on search results
+                                        if any(x in full_text for x in ['prefeitura', 'detran', 'ipva', 'multa', 'tributo', 'gov']):
+                                            found_cat = 'Impostos/Gov'
+                                        elif any(x in full_text for x in ['farmacia', 'drogaria', 'remedio']):
+                                            found_cat = 'Saúde'
+                                        elif any(x in full_text for x in ['mercado', 'supermercado', 'atacadista', 'alimentos']):
+                                            found_cat = 'Alimentação'
+                                        elif any(x in full_text for x in ['posto', 'combustivel', 'gasolina', 'auto']):
+                                            found_cat = 'Transporte'
+                                        elif any(x in full_text for x in ['restaurante', 'lanchonete', 'burger', 'pizza', 'ifood']):
+                                            found_cat = 'Alimentação'
+                                        elif any(x in full_text for x in ['pagamento', 'boleto', 'conta']):
+                                             # Too generic, keep as Outros or maybe 'Contas'
+                                             pass
+                                        
+                                        st.session_state["web_cache"][item_name] = found_cat
+                                        
+                                        if found_cat:
+                                            df.loc[df[desc_col] == item_name, 'Categoria'] = found_cat
+                                            
+                                    time.sleep(0.5) # Avoid rate limit
+                                except Exception as e:
+                                    print(f"Erro na busca web para {item_name}: {e}")
+                                    
+                            progress_bar.empty()
+
                     # 2. Separate Groups
                     # Income: > 0
                     df_income = df[df[val_col] > 0].copy()
@@ -2087,7 +2149,17 @@ def render_financial_view():
                          else:
                             st.info("Nenhum investimento identificado neste período.")
 
-                        
+
+                    # ─── EXPORT BUTTON ───
+                    st.divider()
+                    csv_export = df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="💾 Baixar Planilha Formatada",
+                        data=csv_export,
+                        file_name="financeiro_organizado.csv",
+                        mime="text/csv",
+                        type="primary"
+                    )
         except Exception as e:
             st.error(f"Erro ao processar arquivo: {e}")
 
