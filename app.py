@@ -1901,6 +1901,7 @@ def render_financial_view():
                 
                 desc_col = next((c for c in df.columns if "desc" in c.lower() or "nome" in c.lower() or "empresa" in c.lower() or "historico" in c.lower()), None)
                 val_col = next((c for c in df.columns if "valor" in c.lower() or "value" in c.lower() or "amount" in c.lower() or "preço" in c.lower()), None)
+                date_col = next((c for c in df.columns if "data" in c.lower() or "date" in c.lower() or "dt" in c.lower() or "periodo" in c.lower()), None)
                 
                 if not desc_col or not val_col:
                     st.error("Não foi possível identificar automaticamente as colunas de 'Descrição' e 'Valor'. Verifique se o CSV tem cabeçalhos como 'Descrição', 'Empresa', 'Valor', 'Amount'.")
@@ -1912,6 +1913,19 @@ def render_financial_view():
                         df[val_col] = pd.to_numeric(df[val_col])
                     except:
                         st.warning("Houve um problema ao converter os valores para número. Verifique se estão no formato correto (ex: 1200,50).")
+                    
+                    # Handle Date Column
+                    if not date_col:
+                        date_col = "Data_Aprox"
+                        df[date_col] = "N/A"
+                    else:
+                        try:
+                            df[date_col] = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
+                            # Format nicely as DD/MM/YYYY for display, but keep object/dt for sorting if needed
+                            # For simple display:
+                            df[date_col] = df[date_col].dt.strftime('%d/%m/%Y').fillna("N/A")
+                        except:
+                            pass
 
                     # ─── DATA ANALYSIS & PROCESSING ───
                     
