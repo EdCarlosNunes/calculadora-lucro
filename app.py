@@ -1834,28 +1834,49 @@ def render_financial_view():
     if uploaded_file:
         try:
             if uploaded_file.name.endswith('.csv'):
+                # Smart CSV Loader
                 try:
-                    # Try default (comma)
-                    df = pd.read_csv(uploaded_file)
-                except Exception:
-                    # Try semicolon (common in BR)
-                    uploaded_file.seek(0)
-                    try:
-                        df = pd.read_csv(uploaded_file, sep=';')
-                    except Exception:
-                        # Try auto-detect engine
+                    # 1. Read first few lines to find the header
+                    # Common bank columns
+                    COMMON_HEADERS = [
+                        "data", "date", "lançamento", "historico", "descrição", "description", 
+                        "valor", "amount", "value", "saldo", "balance", "documento"
+                    ]
+                    
+                    # Read only start of file to detect format
+                    content = uploaded_file.getvalue().decode("utf-8", errors="ignore")
+                    lines = content.split('\n')
+                    
+                    skip_rows = 0
+                    sep = ','
+                    found_header = False
+                    
+                    for i, line in enumerate(lines[:20]): # Check first 20 lines
+                        line_lower = line.lower()
+                        # Count matches of common headers in this line
+                        matches = sum(1 for h in COMMON_HEADERS if h in line_lower)
+                        
+                        if matches >= 2: # At least 2 known columns found
+                            skip_rows = i
+                            found_header = True
+                            # Detect separator
+                            if ';' in line:
+                                sep = ';'
+                            else:
+                                sep = ','
+                            break
+                    
+                    if not found_header:
+                        # Fallback: Try reading normally with python engine to handle bad lines
                         uploaded_file.seek(0)
-                        try:
-                            df = pd.read_csv(uploaded_file, sep=None, engine='python')
-                        except Exception as e:
-                            # If all fails, maybe it has metadata rows? Try skipping lines
-                            uploaded_file.seek(0)
-                            try:
-                                # Try skipping first few lines if they are metadata
-                                df = pd.read_csv(uploaded_file, sep=';', skiprows=1)
-                            except:
-                                st.error(f"Erro ao ler CSV: {e}. Tente abrir no Excel e salvar como 'CSV (separado por vírgulas)'.")
-                                df = pd.DataFrame() # Stop processing
+                        df = pd.read_csv(uploaded_file, sep=None, engine='python', on_bad_lines='skip')
+                    else:
+                        uploaded_file.seek(0)
+                        df = pd.read_csv(uploaded_file, skiprows=skip_rows, sep=sep, on_bad_lines='skip')
+                        
+                except Exception as e:
+                    st.error(f"Não foi possível ler o CSV. Erro: {e}")
+                    df = pd.DataFrame()
             elif uploaded_file.name.endswith('.pdf'):
                 with st.spinner("📄 Lendo PDF..."):
                     df = parse_pdf(uploaded_file)
