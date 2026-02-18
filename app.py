@@ -2252,9 +2252,9 @@ def main():
             padding: 0;
             border-radius: 0;
             display: flex;
-            justify-content: center;
+            justify-content: flex-start; /* Align Left */
             width: fit-content;
-            margin: 0 auto 20px auto;
+            margin: 5px 0 0 0; /* Align with logo */
             border: none;
             gap: 20px; /* Space between text links */
         }
@@ -2266,7 +2266,7 @@ def main():
             border-radius: 0;
             cursor: pointer;
             transition: all 0.2s ease;
-            text-align: center;
+            text-align: left;
             border: none;
             margin: 0;
             color: #86868b; /* Apple Gray Text */
@@ -2299,15 +2299,17 @@ def main():
     )
     
     # Header/Navbar
+    # Use standard container but tighter columns
     with st.container():
-        c1, c2, c3 = st.columns([1, 6, 1])
+        # c1 (Logo) is small, c2 (Menu) is close to it
+        c1, c2, c3 = st.columns([0.4, 4, 1]) 
         
         with c1:
              # Black Dollar Sign Logo
-             st.markdown('<div style="font-size: 24px; font-weight: 900; color: #000; padding-top: 5px;">$</div>', unsafe_allow_html=True)
+             st.markdown('<div style="font-size: 24px; font-weight: 900; color: #000; padding-top: 5px; padding-left: 10px;">$</div>', unsafe_allow_html=True)
              
         with c2:
-            # Centered Navigation
+            # Navigation (Left Aligned via CSS)
             selected_section = st.radio(
                 "Navegação",
                 ["Calculadora de Venda", "Organização Financeira"],
@@ -2321,8 +2323,8 @@ def main():
                 st.session_state["current_view"] = "calculator"
             else:
                 st.session_state["current_view"] = "financial"
-                
-        st.divider()    
+    
+    # Divider REMOVED as requested    
 
     # View Routing
     if st.session_state["current_view"] == "calculator":
