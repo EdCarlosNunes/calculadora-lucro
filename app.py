@@ -171,6 +171,7 @@ def calculate_mercado_livre(
     fixed_expenses_per_unit: float,
     desired_margin_pct: float,
     other_pct: float,
+    include_fixed_fee: bool = True,
 ) -> dict:
     commission_pct = MERCADO_LIVRE["ad_types"][ad_type][category]
     
@@ -192,28 +193,33 @@ def calculate_mercado_livre(
     if divisor > 0.01:
         # Regime 1: Price < 79. Check tiers.
         # Tier 1: <= 29. Fee 6.25. No Shipping.
-        p1 = (cost + extra_cost + fixed_expenses_per_unit + 6.25) / divisor
+        fee_tier1 = 6.25 if include_fixed_fee else 0.0
+        p1 = (cost + extra_cost + fixed_expenses_per_unit + fee_tier1) / divisor
         if p1 <= 29.00:
             suggested_price = p1
         else:
             # Tier 2: 29 < p <= 50. Fee 6.50.
-            p2 = (cost + extra_cost + fixed_expenses_per_unit + 6.50) / divisor
+            fee_tier2 = 6.50 if include_fixed_fee else 0.0
+            p2 = (cost + extra_cost + fixed_expenses_per_unit + fee_tier2) / divisor
             if p2 <= 50.00:
                 suggested_price = p2
             else:
                 # Tier 3: 50 < p < 79. Fee 6.75.
-                p3 = (cost + extra_cost + fixed_expenses_per_unit + 6.75) / divisor
+                fee_tier3 = 6.75 if include_fixed_fee else 0.0
+                p3 = (cost + extra_cost + fixed_expenses_per_unit + fee_tier3) / divisor
                 if p3 < 79.00:
                     suggested_price = p3
                 else:
                     # Regime 2: >= 79. No Fixed Fee. YES Shipping deduction.
+                    # Standard logic: Fee is 0 if price >= 79. So include_fixed_fee doesn't matter here for the fee itself,
+                    # but logic says "No Fixed Fee". 
                     p4 = (cost + extra_cost + fixed_expenses_per_unit + shipping_cost) / divisor
                     suggested_price = max(79.00, p4)
                     
     final_price = round(suggested_price, 2)
     
     # Recalculate actuals
-    real_fixed_fee = get_fixed_fee(final_price)
+    real_fixed_fee = get_fixed_fee(final_price) if include_fixed_fee else 0.0
     real_shipping = shipping_cost if final_price >= 79.00 else 0.0
     
     commission = final_price * commission_factor
@@ -769,24 +775,39 @@ def inject_css():
 
         /* ── Custom result cards ──────────────── */
         .results-container {
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
             margin-bottom: 20px;
-            justify-content: center;
         }
 
+        .results-row-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .results-container, .results-row-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+
         .result-card {
-            background: var(--glass-bg);
-            backdrop-filter: var(--glass-blur);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: 20px;
-            box-shadow: var(--glass-shadow);
+            background: #ffffff; /* Explicitly white as per screenshot */
+            /* backdrop-filter: var(--glass-blur); Removed for solid white look */
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 20px; /* Slightly more rounded as per screenshot */
+            padding: 24px 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); /* Soft shadow */
             text-align: center;
             transition: transform 0.3s ease;
-            flex: 1 1 160px; /* Grow, Shrink, Basis */
-            min-width: 160px; /* Force minimum width */
+            flex: 1 1 300px; /* Grow, Shrink, Basis - adjusted for 3 up on desktop */
+            min-width: 250px; /* Force minimum width to wrap if needed */
             max-width: 100%; /* Allow full width on mobile if needed */
         }
 
@@ -796,34 +817,37 @@ def inject_css():
         }
 
         .result-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-bottom: 8px;
-            white-space: nowrap; /* Prevent label wrapping too */
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            color: #000000 !important; /* Force Black */
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            margin-bottom: 8px !important;
+            white-space: nowrap !important;
         }
 
         .result-value {
-            font-size: 24px;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-            color: var(--text-primary);
-            white-space: nowrap; /* CRITICAL: Prevent value wrapping */
+            font-size: 28px !important;
+            font-weight: 800 !important;
+            letter-spacing: -0.02em !important;
+            color: #000000 !important; /* Force Black */
+            white-space: nowrap !important;
+            line-height: 1.2 !important;
         }
         
         .result-sub {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 6px;
+            font-size: 13px !important;
+            color: #444444 !important; /* Dark Grey */
+            margin-top: 4px !important;
+            font-weight: 500 !important;
         }
 
-        .positive { color: var(--accent-green) !important; }
-        .negative { color: var(--accent-red) !important; }
-        .neutral { color: var(--accent-blue) !important; }
-        .orange { color: var(--accent-orange) !important; }
-        .yellow { color: var(--accent-yellow) !important; }
+        /* Stronger colors for white background */
+        .positive { color: #198754 !important; } /* Green */
+        .negative { color: #dc3545 !important; } /* Red */
+        .neutral { color: #0d6efd !important; } /* Blue */
+        .orange { color: #fd7e14 !important; } /* Orange */
+        .yellow { color: #ffc107 !important; } /* Yellow */
 
         /* ── Hero header ──────────────────────── */
         .hero-title {
@@ -838,32 +862,6 @@ def inject_css():
             margin-bottom: 6px;
         }
         
-        /* ── KPI Cards (st.metric) ──────────────── */
-        [data-testid="stMetric"] {
-            background-color: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 16px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(10px);
-            transition: transform 0.2s ease;
-        }
-        [data-testid="stMetric"]:hover {
-            transform: translateY(-2px);
-            background-color: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-        [data-testid="stMetricLabel"] {
-            font-size: 14px !important;
-            color: rgba(255, 255, 255, 0.6) !important;
-            font-weight: 500 !important;
-        }
-        [data-testid="stMetricValue"] {
-            font-size: 26px !important;
-            font-weight: 700 !important;
-            color: #ffffff !important;
-        }
-        
         /* ── Helpers ──────────────────────────── */
         hr { border-color: rgba(118, 118, 128, 0.2) !important; }
         
@@ -871,6 +869,9 @@ def inject_css():
         """,
         unsafe_allow_html=True,
     )
+
+
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -894,75 +895,50 @@ def render_results(result: dict, title: str = "📊 Resultados por Venda"):
 
     st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
 
-    # ─────────────────────────────────────────────────────────────
-    # KPI SECTION (st.metric)
-    # ─────────────────────────────────────────────────────────────
-    kpi1, kpi2, kpi3 = st.columns(3)
-
-    # Calculate Deltas (Visual indicators)
-    # We use the value itself as delta to get the Green/Red color automatically
-    # OR we can use a custom logic. User asked for Green if positive, Red if negative.
-    # st.metric(..., delta=value) works perfectly for this.
-    
-    # User requested to remove redundancy. We will remove the text duplication but keep the color logic.
-    # Streamlit's delta logic is tied to the value passed.
-    # If we pass a string with a space " ", it might show just the arrow/color.
-    # Let's try passing a small indicator like " " or "." to just trigger color.
-    # Or, we can accept that "Redundancy" refers to the double number.
-    
-    with kpi1:
-        st.metric(
-            label="Lucro Líquido",
-            value=f"R$ {profit:,.2f}",
-            delta=" " if profit >= 0 else "- ", # Trick to show color without number redundancy
-            delta_color="normal" # Green for positive, Red for negative
-        )
-    
-    with kpi2:
-        st.metric(
-            label="Margem de Lucro",
-            value=f"{result['margin']:.1f}%",
-            delta=" " if result['margin'] >= 0 else "- ",
-            delta_color="normal"
-        )
-
-    with kpi3:
-        st.metric(
-            label="ROI",
-            value=f"{result['roi']:.2f}",
-            delta=" " if result['roi'] >= 0 else "- ",
-            delta_color="normal"
-        )
-    
-    st.markdown("---")
-
     # Accumulate HTML for cards
     cards_html = ""
-    # Removed generic "Lucro Líquido" card to avoid duplication with KPI
     
-    cards_html += render_result_card(
+    
+    # 5 Card Layout (3 up, 2 down)
+    
+    # Top Row (3 cards)
+    row1_html = ""
+    row1_html += render_result_card(
+        "Lucro Líquido",
+        f"R$ {profit:,.2f}",
+        color,
+        "por venda",
+    )
+    row1_html += render_result_card(
         "Preço Sugerido",
         f"R$ {result['suggested_price']:,.2f}",
         "neutral",
         "baseado na margem",
     )
-    # Removed generic "Margem Líquida" card to avoid duplication with KPI
+    row1_html += render_result_card(
+        "Margem Líquida",
+        f"{result['margin']:.1f}%",
+        color,
+    )
 
-    cards_html += render_result_card(
+    # Bottom Row (2 cards)
+    row2_html = ""
+    row2_html += render_result_card(
         "Tarifas Totais",
         f"R$ {result['total_fees']:,.2f}",
         "orange",
         f"{result['commission_pct']:.0f}% comissão",
     )
-    cards_html += render_result_card(
+    row2_html += render_result_card(
         "Você Recebe",
         f"R$ {result['you_receive']:,.2f}",
         "yellow",
         "após tarifas",
     )
 
-    # Render container
-    st.markdown(f'<div class="results-container">{cards_html}</div>', unsafe_allow_html=True)
+    # Render containers
+    st.markdown(f'<div class="results-container">{row1_html}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="results-row-2">{row2_html}</div>', unsafe_allow_html=True)
 
 
 def render_charts(
@@ -1212,7 +1188,8 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                     help="A porcentagem de lucro que você quer colocar no bolso depois de pagar tudo.",
                 )
 
-            col_sale3, _ = st.columns(2)
+
+            col_sale3, col_sale4 = st.columns(2)
             with col_sale3:
                 shipping = st.number_input(
                     "Frete do Vendedor (R$)",
@@ -1222,6 +1199,14 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                     format="%.2f",
                     key="ml_shipping",
                     help="Se o produto for acima de R$79, você paga uma parte do frete. Coloque esse valor aqui."
+                )
+            with col_sale4:
+                st.write("") # Spacer
+                include_fixed_fee = st.checkbox(
+                    "Cobrar Taxa Fixa?",
+                    value=True,
+                    key="ml_fixed_fee",
+                    help="Desmarque se quiser simular isenção da taxa fixa (R$6.xx) para produtos abaixo de R$79.",
                 )
 
         # ─────────────────────────────────────────────────────────────
@@ -1252,19 +1237,19 @@ def tab_mercado_livre(fixed: dict, product_name: str):
                 )
 
     result_no_fixed = calculate_mercado_livre(
-        cost, ad_type, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0
+        cost, ad_type, category, extra_cost, shipping, tax_pct, 0.0, desired_margin, 0.0, include_fixed_fee
     )
 
     result_with_fixed = None
     if fixed["has_expenses"]:
         result_with_fixed = calculate_mercado_livre(
-            cost, ad_type, category, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"]
+            cost, ad_type, category, extra_cost, shipping, tax_pct, fixed["per_unit"], desired_margin, fixed["other_pct"], include_fixed_fee
         )
 
     with col2:
         render_results(result_no_fixed, "📊 Resultados (Sem Despesas Fixas)")
         if result_with_fixed:
-            st.markdown("---")
+            # Removed separator
             render_results(result_with_fixed, "💼 Resultados (Com Despesas Fixas)")
 
     render_charts(result_no_fixed, result_with_fixed, fixed["has_expenses"], fixed["total_monthly_fixed"])
@@ -1398,7 +1383,7 @@ def tab_amazon(fixed: dict, product_name: str):
     with col2:
         render_results(result_no_fixed, "📊 Resultados (Sem Despesas Fixas)")
         if result_with_fixed:
-            st.markdown("---")
+            # Removed separator
             render_results(result_with_fixed, "💼 Resultados (Com Despesas Fixas)")
 
     render_charts(result_no_fixed, result_with_fixed, fixed["has_expenses"], fixed["total_monthly_fixed"])
@@ -1525,7 +1510,7 @@ def tab_shopee(fixed: dict, product_name: str):
     with col2:
         render_results(result_no_fixed, "📊 Resultados (Sem Despesas Fixas)")
         if result_with_fixed:
-            st.markdown("---")
+            # Removed separator
             render_results(result_with_fixed, "💼 Resultados (Com Despesas Fixas)")
 
     render_charts(result_no_fixed, result_with_fixed, fixed["has_expenses"], fixed["total_monthly_fixed"])
