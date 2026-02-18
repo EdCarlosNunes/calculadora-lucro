@@ -3,6 +3,8 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 import time
+import google.generativeai as genai
+import os
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -425,14 +427,7 @@ def calculate_shopee(
     }
 
 
-def tab_mercado_livre(fixed: dict):
-    # ... (Same UI code) ...
-    # Re-implementing just the calling part to save lines, assuming you want me to be efficient.
-    # But replace_file_content needs context. I will use a larger block or verify I'm editing the right place.
-    # Since I need to change signatures in `calculate_*` and calls in `tab_*`, I'll do a MultiReplace or separate chunks.
-    # The previous `calculate_*` definitions are being replaced above.
-    # Now I need to update the CALLS within `tab_mercado_livre` etc.
-    pass 
+ 
 
 
 
@@ -1650,30 +1645,41 @@ def render_saved_simulations():
             st.rerun()
 
 
-def main():
-    inject_css()
+def render_calculator_view(product_name: str):
+    # inject_css() -> Moved to main()
 
     # Hero header
-    # Navbar
-    st.markdown(
-        """
-        <div class="navbar">
-            <div class="navbar-logo">🧮</div>
-            <div class="navbar-title">Calculadora de Lucro</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Navbar -> Moved to main() as interactive components
 
     # Global Inputs
+    # Global Inputs (Moved outside if shared, or kept here if specific)
+    # The prompt implies these are part of the "Calculadora de Venda".
+    # I'll keep them here for now, but `product_name` was passed in.
+    # Actually, `product_name` definition was inside main. 
+    # I should remove the argument from my new function and keep it inside?
+    # Or pass it? The original `main` had it inside.
+    # Let's keep it inside `render_calculator_view` for now, but user might want it shared?
+    # User said "queria criar uma outra aba para outro programa".
+    # So "Organização" is likely independent of the "Product" being calculated.
+    # I will keep `product_name` inside `render_calculator_view`.
+    
+    # Wait, I replaced `def main():` with `def render_calculator_view(product_name: str):`.
+    # But `product_name` is defined INSIDE.
+    # So I should remove the arg from the signature I just proposed.
+    pass
+
     with st.container():
         st.markdown('<div class="glass-container">', unsafe_allow_html=True)
-        product_name = st.text_input(
+        # Re-defining product_name here as it was in original
+        product_name_input = st.text_input(
             "📦 Nome do Produto / SKU (Opcional)", 
             placeholder="Ex: Fone Bluetooth XYZ", 
-            help="Nome para você identificar este cálculo depois na lista de simulações salvas."
+            help="Nome para você identificar este cálculo depois na lista de simulações salvas.",
+            value=product_name if product_name else ""
         )
         st.markdown('</div>', unsafe_allow_html=True)
+        
+    product_name = product_name_input
 
     # Fixed expenses section (shared across all tabs)
     fixed = render_fixed_expenses()
@@ -1708,144 +1714,184 @@ def main():
     render_saved_simulations()
 
     # Footer
+    # Footer -> Moved to main()
+
+
+
+def render_financial_view():
+    st.markdown("## 📂 Organização Financeira")
+    st.info("Faça upload de uma planilha (CSV) para análise de gastos com IA.")
+
+    # 1. Upload
+    uploaded_file = st.file_uploader("Upload CSV Financeiro", type=["csv"])
+    
+    # 2. API Key (Password)
+    api_key = st.text_input("🔑 Google Gemini API Key", type="password", help="Obtenha sua chave no Google AI Studio.")
+    
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.write("### 🔍 Prévia dos Dados")
+            st.dataframe(df.head(), use_container_width=True)
+            
+            if api_key and st.button("🚀 Analisar com IA", type="primary"):
+                with st.spinner("🤖 A IA está analisando seus gastos..."):
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-1.5-pro')
+                    
+                    # Convert sample to CSV string for prompt
+                    csv_string = df.to_csv(index=False)
+                    
+                    prompt = f"""
+                    Você é um analista financeiro experiente. Analise os dados financeiros abaixo (formato CSV).
+                    
+                    TAREFAS:
+                    1. Identifique as colunas de 'Descrição/Empresa' e 'Valor'. Se não estiver claro, tente inferir.
+                    2. Categorize cada transação em categorias úteis (ex: Marketing, Fornecedores, Impostos, Logística, Pessoal, Outros).
+                    3. Gere um resumo com:
+                       - Total Gasto
+                       - Maior Despesa (Nome e Valor)
+                       - Gasto por Categoria (Totais)
+                    
+                    DADOS CSV:
+                    {csv_string}
+                    
+                    FORMATO DE RESPOSTA (JSON):
+                    Retorne APENAS um JSON válido seguindo esta estrutura, sem markdown (```json ... ```):
+                    {{
+                        "total_spent": float,
+                        "biggest_expense": {{ "name": string, "value": float }},
+                        "categories": {{ "Category Name": float, ... }},
+                        "analysis_summary": "Breve texto descrevendo os principais insights."
+                    }}
+                    """
+                    
+                    try:
+                        response = model.generate_content(prompt)
+                        result_text = response.text
+                        
+                        # Cleanup markdown code blocks if present
+                        if "```json" in result_text:
+                            import re
+                            match = re.search(r"```json\s*(.*?)\s*```", result_text, re.DOTALL)
+                            if match:
+                                result_text = match.group(1)
+                        elif "```" in result_text:
+                             match = re.search(r"```\s*(.*?)\s*```", result_text, re.DOTALL)
+                             if match:
+                                result_text = match.group(1)
+                                
+                        import json
+                        data = json.loads(result_text)
+                        
+                        # Display Results
+                        st.divider()
+                        st.subheader("📊 Relatório Financeiro Inteligente")
+                        
+                        kpi1, kpi2 = st.columns(2)
+                        with kpi1:
+                            st.metric("Total Gasto", f"R$ {data.get('total_spent', 0):,.2f}")
+                        with kpi2:
+                            biggest = data.get('biggest_expense', {})
+                            st.metric("Maior Despesa", f"{biggest.get('name', 'N/A')}", f"R$ {biggest.get('value', 0):,.2f}")
+                            
+                        st.caption(data.get("analysis_summary", ""))
+                        
+                        # Charts
+                        cats = data.get("categories", {})
+                        if cats:
+                            # Convert to DF for chart
+                            cat_df = pd.DataFrame(list(cats.items()), columns=["Categoria", "Valor"])
+                            
+                            fig = go.Figure(data=[go.Pie(labels=cat_df["Categoria"], values=cat_df["Valor"], hole=.3)])
+                            fig.update_layout(title_text="Distribuição de Gastos por Categoria", **CHART_LAYOUT)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            st.bar_chart(cat_df.set_index("Categoria"))
+
+                    except Exception as e:
+                        st.error(f"Erro na análise da IA: {e}")
+                        
+        except Exception as e:
+            st.error(f"Erro ao ler CSV: {e}")
+
+
+def main():
+    inject_css()
+    
+    if "current_view" not in st.session_state:
+        st.session_state["current_view"] = "calculator"
+
+    # Navbar Logic
+    # We use columns to create buttons that look like a navbar
+    st.markdown(
+        """
+        <style>
+        div.row-widget.stButton > button {
+            width: 100%;
+            border-radius: 0px;
+            height: 3em;
+            background-color: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #555;
+            font-weight: 600;
+        }
+        div.row-widget.stButton > button:hover {
+            color: #000;
+            background-color: #f0f2f6;
+        }
+        div.row-widget.stButton > button:focus {
+            box-shadow: none;
+            color: #000;
+        }
+        </style>
+        """, unsafe_allow_html=True
+    )
+    
+    # Header/Navbar
+    # Using a container with custom styling for the navbar background
+    with st.container():
+        st.markdown('<div class="navbar" style="padding-bottom: 0px; margin-bottom: 10px; display:block;">', unsafe_allow_html=True)
+        
+        c1, c2, c3 = st.columns([1, 2, 2])
+        
+        with c1:
+             st.markdown('<div style="font-size: 24px;">🧮</div>', unsafe_allow_html=True)
+             
+        with c2:
+            if st.button("Calculadora de Venda", type="primary" if st.session_state["current_view"] == "calculator" else "secondary", use_container_width=True):
+                st.session_state["current_view"] = "calculator"
+                st.rerun()
+                
+        with c3:
+            if st.button("Organização Financeira", type="primary" if st.session_state["current_view"] == "financial" else "secondary", use_container_width=True):
+                st.session_state["current_view"] = "financial"
+                st.rerun()
+                
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # View Routing
+    if st.session_state["current_view"] == "calculator":
+        render_calculator_view("") # Pass empty string or handle logic inside
+    elif st.session_state["current_view"] == "financial":
+        render_financial_view()
+
+    # Footer
     st.markdown("---")
     st.markdown(
         """
         <div style="text-align: center; color: #666; font-size: 12px;">
             <p>
-                Calculadora de Lucro para Marketplaces. 
-                Os valores são estimativas e podem variar. Consulte as taxas oficiais.
+                Calculadora de Lucro & Organização Financeira. 
             </p>
         </div>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
-
 
 if __name__ == "__main__":
     main()
 
 
-def render_fixed_expenses() -> dict:
-    """Render optional fixed monthly expenses section and return values."""
-    with st.expander("💼 Despesas Fixas Mensais (opcional)", expanded=False):
-        st.markdown(
-            """
-            <div style="font-size:13px; color:#a1a1aa; margin-bottom:12px;">
-                Informe seus gastos fixos mensais. Eles serão rateados por unidade vendida
-                nas projeções com despesas fixas.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        fc1, fc2, fc3 = st.columns(3)
-        with fc1:
-            mei = st.number_input(
-                "MEI (R$/mês)",
-                min_value=0.0,
-                value=0.0,
-                step=10.0,
-                format="%.2f",
-                key="mei",
-                help="Valor fixo que você paga todo mês do seu MEI (DAS).",
-            )
-        with fc2:
-            platform = st.number_input(
-                "Plataforma / NF-e (R$/mês)",
-                min_value=0.0,
-                value=0.0,
-                step=10.0,
-                format="%.2f",
-                key="platform",
-                help="Mensalidade de sistemas como Bling, Tiny ou Hub de integração.",
-            )
-        with fc3:
-            supplier = st.number_input(
-                "Assinatura Fornecedor (R$/mês)",
-                min_value=0.0,
-                value=0.0,
-                step=10.0,
-                format="%.2f",
-                key="supplier",
-                help="Se você paga alguma assinatura mensal para ter acesso a fornecedores.",
-            )
 
-        fc4, fc5, _ = st.columns(3)
-        with fc4:
-            other_fixed = st.number_input(
-                "Outros Custos Fixos (R$/mês)",
-                min_value=0.0,
-                value=0.0,
-                step=10.0,
-                format="%.2f",
-                key="other_fixed",
-                help="Soma de outras contas fixas: Internet, Luz, Aluguel, Contador, etc.",
-            )
-        with fc5:
-            estimated_sales = st.number_input(
-                "Vendas estimadas/mês (para rateio)",
-                min_value=1,
-                value=1,
-                step=5,
-                key="estimated_sales",
-                help="Quantas vendas você acha que vai fazer no mês? Usamos isso para dividir os custos fixos por cada produto.",
-            )
-            
-        st.markdown("---")
-        st.markdown(
-            """
-            <div style="font-size:13px; color:#a1a1aa; margin-bottom:12px;">
-                <b>Taxas e Custos Operacionais (% sobre a venda)</b><br>
-                Valores percentuais que incidem sobre o preço de venda ou custos variáveis.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        
-        op1, op2, op3 = st.columns(3)
-        with op1:
-            marketing_pct = st.number_input(
-                "Marketing / Ads (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.0,
-                step=0.5,
-                format="%.1f",
-                key="marketing_pct",
-                help="Porcentagem que você gasta com anúncios (Ads) para fazer uma venda.",
-            )
-        with op2:
-            antecipation_pct = st.number_input(
-                "Antecipação / Financeiro (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.0,
-                step=0.1,
-                format="%.1f",
-                key="antecipation_pct",
-                help="Taxa que o banco ou plataforma cobra se você quiser receber o dinheiro antes do prazo.",
-            )
-        with op3:
-            losses_pct = st.number_input(
-                "Perdas / Devoluções (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.0,
-                step=0.1,
-                format="%.1f",
-                key="losses_pct",
-                help="Reserva para cobrir prejuízos com devoluções ou produtos danificados.",
-            )
-            
-        op4, _, _ = st.columns(3)
-        with op4:
-            other_taxes_pct = st.number_input(
-                "Outros Impostos (DIFAL/ST) (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.0,
-                step=0.1,
-                format="%.1f",
-                key="other_taxes_pct",
-                help="Impostos extras além do Simples Nacional, como DIFAL ou Substituição Tributária.",
-            )
