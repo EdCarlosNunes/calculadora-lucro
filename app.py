@@ -838,6 +838,32 @@ def inject_css():
             margin-bottom: 6px;
         }
         
+        /* ── KPI Cards (st.metric) ──────────────── */
+        [data-testid="stMetric"] {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s ease;
+        }
+        [data-testid="stMetric"]:hover {
+            transform: translateY(-2px);
+            background-color: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 14px !important;
+            color: rgba(255, 255, 255, 0.6) !important;
+            font-weight: 500 !important;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 26px !important;
+            font-weight: 700 !important;
+            color: #ffffff !important;
+        }
+        
         /* ── Helpers ──────────────────────────── */
         hr { border-color: rgba(118, 118, 128, 0.2) !important; }
         
@@ -867,6 +893,42 @@ def render_results(result: dict, title: str = "📊 Resultados por Venda"):
     color = "positive" if profit >= 0 else "negative"
 
     st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+
+    # ─────────────────────────────────────────────────────────────
+    # KPI SECTION (st.metric)
+    # ─────────────────────────────────────────────────────────────
+    kpi1, kpi2, kpi3 = st.columns(3)
+
+    # Calculate Deltas (Visual indicators)
+    # We use the value itself as delta to get the Green/Red color automatically
+    # OR we can use a custom logic. User asked for Green if positive, Red if negative.
+    # st.metric(..., delta=value) works perfectly for this.
+    
+    with kpi1:
+        st.metric(
+            label="Lucro Líquido",
+            value=f"R$ {profit:,.2f}",
+            delta=f"{profit:,.2f} R$",
+            delta_color="normal" # Green for positive, Red for negative
+        )
+    
+    with kpi2:
+        st.metric(
+            label="Margem de Lucro",
+            value=f"{result['margin']:.1f}%",
+            delta=f"{result['margin']:.1f}%",
+            delta_color="normal"
+        )
+
+    with kpi3:
+        st.metric(
+            label="ROI",
+            value=f"{result['roi']:.2f}",
+            delta=f"{result['roi']:.2f}",
+            delta_color="normal"
+        )
+    
+    st.markdown("---")
 
     # Accumulate HTML for cards
     cards_html = ""
