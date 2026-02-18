@@ -1916,8 +1916,17 @@ def render_financial_view():
                     # 1. Categorization Logic (Define FIRST to use in filtering)
                     def categorize(desc):
                         desc = str(desc).lower()
-                        # Investments (NEW)
-                        if any(x in desc for x in ['cdb', 'lci', 'lca', 'tesouro', 'aplicacao', 'poupanca', 'b3', 'corretora', 'fundo', 'ativo', 'investimento', 'banco inter', 'nu invest', 'clear', 'rico', 'xp']):
+                        # Investments ( Broader list)
+                        investment_keywords = [
+                            'cdb', 'lci', 'lca', 'tesouro', 'selic', 'ipca', 
+                            'aplicacao', 'aplic', 'poupanca', 'b3', 'bm&f', 
+                            'corretora', 'fundo', 'ativo', 'investimento', 'aporte',
+                            'banco inter', 'nu invest', 'clear', 'rico', 'xp', 'btg', 'genial', 'modal', 'easynvest', 'orama',
+                            'cripto', 'binance', 'bitcoin', 'btc', 'eth', 'avenue', 'nomad',
+                            'fii', 'acoes', 'dividendos', 'jcp', 'rendimento', 'proventos', 'custodia',
+                            'vgbl', 'pgbl', 'previdencia'
+                        ]
+                        if any(x in desc for x in investment_keywords):
                             return 'Investimento'
                         if any(x in desc for x in ['facebook', 'google', 'ads', 'anuncio', 'marketing', 'propaganda']):
                             return 'Marketing'
