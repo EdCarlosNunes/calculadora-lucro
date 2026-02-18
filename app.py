@@ -774,6 +774,28 @@ def inject_css():
         }
 
         /* ── Custom result cards ──────────────── */
+        /* Navbar */
+        .navbar {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); /* Deep Purple/Blue */
+            padding: 20px 30px;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            color: white;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .navbar-logo {
+            font-size: 32px;
+        }
+        .navbar-title {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
         .results-container {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -1610,13 +1632,12 @@ def main():
     inject_css()
 
     # Hero header
+    # Navbar
     st.markdown(
         """
-        <div style="padding: 40px 0 10px 0;">
-            <div class="hero-title">💰 Calculadora de Lucro</div>
-            <div class="hero-sub">
-                Calcule seu lucro real vendendo na Amazon, Mercado Livre e Shopee
-            </div>
+        <div class="navbar">
+            <div class="navbar-logo">🧮</div>
+            <div class="navbar-title">Calculadora de Lucro</div>
         </div>
         """,
         unsafe_allow_html=True,
