@@ -2245,11 +2245,11 @@ def render_chat_view():
         return
 
     # 2. Context Loading
-    if "finance_df" not in st.session_state or st.session_state["finance_df"].empty:
-        st.warning("📂 Nenhum dado financeiro encontrado. Por favor, vá em 'Organização Financeira' e carregue um arquivo primeiro.")
-        return
-        
-    df = st.session_state["finance_df"]
+    df = None
+    if "finance_df" in st.session_state and not st.session_state["finance_df"].empty:
+        df = st.session_state["finance_df"]
+    else:
+        st.info("💡 Modo Consultor Geral: Carregue seus dados na aba 'Organização Financeira' para uma análise personalizada.", icon="💡")
     
     # 3. Chat Interface
     if "messages" not in st.session_state:
@@ -2259,7 +2259,7 @@ def render_chat_view():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Pergunte sobre seus gastos (ex: Quanto gastei com Uber? Qual o total de receitas?)"):
+    if prompt := st.chat_input("Pergunte sobre finanças (investimentos, segurança, ou seus gastos se carregou dados)"):
         # Display user message
         st.session_state["messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -2272,47 +2272,47 @@ def render_chat_view():
                 model = genai.GenerativeModel('gemini-pro')
                 
                 # Context Building
-                # We summarize the DF to avoid sending too much tokens if large
-                # Check if we have processed columns
-                desc_col = next((c for c in df.columns if "desc" in c.lower() or "nome" in c.lower()), None)
-                val_col = next((c for c in df.columns if "valor" in c.lower() or "value" in c.lower()), None)
-                date_col = next((c for c in df.columns if "data" in c.lower() or "date" in c.lower()), None)
+                data_summary = "Nenhum dado pessoal carregado. Responda como um consultor financeiro geral."
                 
-                if desc_col and val_col:
-                     # Analyze breakdown
-                     total_in = df[df[val_col] > 0][val_col].sum()
-                     total_out = df[df[val_col] < 0][val_col].sum()
-                     
-                     # Top 5 expenses
-                     top_5 = df[df[val_col] < 0].sort_values(by=val_col).head(5)
-                     top_5_str = top_5[[desc_col, val_col]].to_string(index=False)
-                     
-                     data_summary = f"""
-                     CONTEXTO FINANCEIRO DO USUÁRIO:
-                     - Total Receitas: R$ {total_in:.2f}
-                     - Total Despesas: R$ {total_out:.2f}
-                     - Saldo: R$ {total_in + total_out:.2f}
-                     - Colunas Disponíveis: {list(df.columns)}
-                     
-                     Amostra (Top 5 Maiores Gastos):
-                     {top_5_str}
-                     
-                     Amostra Geral (Primeiras 10 linhas):
-                     {df.head(10).to_string(index=False)}
-                     """
-                else:
-                    data_summary = f"Dados brutos: {df.head(20).to_string()}"
+                if df is not None:
+                    # Check if we have processed columns
+                    desc_col = next((c for c in df.columns if "desc" in c.lower() or "nome" in c.lower()), None)
+                    val_col = next((c for c in df.columns if "valor" in c.lower() or "value" in c.lower()), None)
+                    date_col = next((c for c in df.columns if "data" in c.lower() or "date" in c.lower()), None)
+                    
+                    if desc_col and val_col:
+                         # Analyze breakdown
+                         total_in = df[df[val_col] > 0][val_col].sum()
+                         total_out = df[df[val_col] < 0][val_col].sum()
+                         
+                         # Top 5 expenses
+                         top_5 = df[df[val_col] < 0].sort_values(by=val_col).head(5)
+                         top_5_str = top_5[[desc_col, val_col]].to_string(index=False)
+                         
+                         data_summary = f"""
+                         CONTEXTO FINANCEIRO DO USUÁRIO (Use apenas se a pergunta for pessoal):
+                         - Total Receitas: R$ {total_in:.2f}
+                         - Total Despesas: R$ {total_out:.2f}
+                         - Saldo: R$ {total_in + total_out:.2f}
+                         - Colunas Disponíveis: {list(df.columns)}
+                         
+                         Amostra (Top 5 Maiores Gastos):
+                         {top_5_str}
+                         
+                         Amostra Geral (Primeiras 10 linhas):
+                         {df.head(10).to_string(index=False)}
+                         """
+                    else:
+                        data_summary = f"Dados brutos do usuário carregados: {df.head(20).to_string()}"
 
                 full_prompt = f"""
-                Você é um analista financeiro pessoal, gentil e preciso.
-                Use os dados abaixo para responder à pergunta do usuário.
-                Se não souber, diga que não encontrou nos dados.
-                Seja conciso.
+                Você é um consultor financeiro experiente, educado e preciso.
+                Se o usuário perguntar sobre dados pessoais, use o CONTEXTO abaixo.
+                Se for uma pergunta geral (investimentos, conceitos, economia), responda com seu conhecimento de IA.
                 
-                DADOS:
                 {data_summary}
                 
-                PERGUNTA: {prompt}
+                PERGUNTA DO USUÁRIO: {prompt}
                 """
                 
                 response = model.generate_content(full_prompt)
