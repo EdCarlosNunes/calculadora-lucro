@@ -2234,62 +2234,82 @@ def main():
         st.session_state["current_view"] = "calculator"
 
     # Navbar Logic
-    # We use columns to create buttons that look like a navbar
+    # New "Segmented Control" Style using Radio Button
     st.markdown(
         """
         <style>
-        div.stButton > button {
-            width: 100%;
-            border-radius: 20px;
-            height: auto;
-            padding: 0.5rem 1rem;
-            background-color: white;
-            border: 1px solid #e0e0e0;
-            color: #555;
-            font-weight: 600;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
+        /* Hide default radio circles */
+        div[role="radiogroup"] > label > div:first-child {
+            display: none !important;
         }
-        div.stButton > button:hover {
-            color: #000;
-            border-color: #ccc;
-            background-color: #f8f9fa;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        div.stButton > button:focus {
-            box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
-            color: #000;
-        }
-        /* Highlight active button */
-        div.stButton > button[kind="primary"] {
+        
+        /* Container for the segmented control */
+        div[role="radiogroup"] {
             background-color: #f0f2f6;
-            border-color: #d1d5db;
-            color: #000;
+            padding: 4px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
         }
+        
+        /* Default state for options (looks like potential tabs) */
+        div[role="radiogroup"] label {
+            background-color: transparent;
+            padding: 8px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            border: none;
+            margin: 0 2px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        /* Hover state */
+        div[role="radiogroup"] label:hover {
+            color: #000;
+            background-color: rgba(255,255,255,0.5);
+        }
+        
+        /* Selected state is tricky to target without :has, but Streamlit adds data-checked */
+        /* Since we can't easily target the specific label for "Checked" via pure CSS in all browsers efficiently without :has,
+           we rely on the fact that Streamlit renders the active one slightly differently or we stick to a simpler style.
+           
+           Actually, let's use a simpler approach: Just make it look like a clean horizontal menu.
+        */
         </style>
         """, unsafe_allow_html=True
     )
     
     # Header/Navbar
-    # We use a container but remove the HTML wrapper that breaks layout
     with st.container():
-        c1, c2, c3 = st.columns([0.5, 2, 2])
+        c1, c2, c3 = st.columns([1, 6, 1])
         
         with c1:
              st.markdown('<div style="font-size: 28px; padding-top: 5px;">🧮</div>', unsafe_allow_html=True)
              
         with c2:
-            if st.button("Calculadora de Venda", type="primary" if st.session_state["current_view"] == "calculator" else "secondary", use_container_width=True):
+            # Centered Navigation
+            selected_section = st.radio(
+                "Navegação",
+                ["Calculadora de Venda", "Organização Financeira"],
+                horizontal=True,
+                label_visibility="collapsed",
+                key="nav_radio"
+            )
+            
+            # Map radio selection to internal view state
+            if selected_section == "Calculadora de Venda":
                 st.session_state["current_view"] = "calculator"
-                st.rerun()
-                
-        with c3:
-            if st.button("Organização Financeira", type="primary" if st.session_state["current_view"] == "financial" else "secondary", use_container_width=True):
+            else:
                 st.session_state["current_view"] = "financial"
-                st.rerun()
-        
-        st.divider()
+                
+        st.divider()    
 
     # View Routing
     if st.session_state["current_view"] == "calculator":
