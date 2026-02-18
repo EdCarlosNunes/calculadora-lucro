@@ -1948,63 +1948,67 @@ def render_financial_view():
 
                     df['Categoria'] = df[desc_col].apply(categorize)
 
-                    # ─── WEB ENRICHMENT (OPTIONAL) ───
-                    cols_enrich = st.columns([3, 1])
-                    do_enrich = cols_enrich[0].checkbox("🌍 Tentar identificar 'Outros' com busca na Web (Mais lento)", value=False)
+                    # ─── AUTOMATIC WEB ENRICHMENT ───
+                    # Analyze 'Outros' to find better categories
+                    unknowns = df[df['Categoria'] == 'Outros'][desc_col].unique()
                     
-                    if do_enrich and DDGS:
-                        unknowns = df[df['Categoria'] == 'Outros'][desc_col].unique()
-                        if len(unknowns) > 0:
-                            progress_bar = st.progress(0, text="Pesquisando na web...")
+                    if DDGS and len(unknowns) > 0:
+                        # Limit to top 10 unique unknowns to avoid long wait times
+                        unknowns_to_search = unknowns[:10] 
+                        
+                        my_bar = st.progress(0, text="🤖 IA Investigando fornecedores desconhecidos...")
+
+                        # Cache for this session
+                        if "web_cache" not in st.session_state:
+                            st.session_state["web_cache"] = {}
                             
-                            # Cache for this session
-                            if "web_cache" not in st.session_state:
-                                st.session_state["web_cache"] = {}
-                                
-                            for i, item_name in enumerate(unknowns):
-                                progress_bar.progress((i + 1) / len(unknowns), text=f"Pesquisando: {item_name}")
-                                
-                                # Check cache first
-                                if item_name in st.session_state["web_cache"]:
-                                    new_cat = st.session_state["web_cache"][item_name]
-                                    if new_cat:
-                                        df.loc[df[desc_col] == item_name, 'Categoria'] = new_cat
-                                    continue
-                                
-                                try:
-                                    with DDGS() as ddgs:
-                                        # Search query: "O que é [Nome] empresa" or "[Nome] cnpj atividade"
-                                        query = f"{item_name} o que é empresa categoria"
-                                        results = list(ddgs.text(query, max_results=3))
-                                        
-                                        found_cat = None
+                        for i, item_name in enumerate(unknowns_to_search):
+                            my_bar.progress((i + 1) / len(unknowns_to_search), text=f"🔎 Pesquisando: {item_name}")
+                            
+                            # Check cache first
+                            if item_name in st.session_state["web_cache"]:
+                                new_cat = st.session_state["web_cache"][item_name]
+                                if new_cat:
+                                    df.loc[df[desc_col] == item_name, 'Categoria'] = new_cat
+                                continue
+                            
+                            try:
+                                with DDGS() as ddgs:
+                                    # Search query: "O que é [Nome] empresa"
+                                    query = f"{item_name} o que é empresa categoria"
+                                    results = list(ddgs.text(query, max_results=2)) # Reduced to 2 for speed
+                                    
+                                    found_cat = None
+                                    if results:
                                         full_text = " ".join([r['body'].lower() for r in results])
                                         
-                                        # Heuristics on search results
-                                        if any(x in full_text for x in ['prefeitura', 'detran', 'ipva', 'multa', 'tributo', 'gov']):
+                                        # Heuristics
+                                        if any(x in full_text for x in ['prefeitura', 'detran', 'ipva', 'multa', 'tributo', 'gov', 'inss', 'simples nacional']):
                                             found_cat = 'Impostos/Gov'
-                                        elif any(x in full_text for x in ['farmacia', 'drogaria', 'remedio']):
+                                        elif any(x in full_text for x in ['farmacia', 'drogaria', 'remedio', 'medicamento']):
                                             found_cat = 'Saúde'
-                                        elif any(x in full_text for x in ['mercado', 'supermercado', 'atacadista', 'alimentos']):
+                                        elif any(x in full_text for x in ['mercado', 'supermercado', 'atacadista', 'alimentos', 'padaria']):
                                             found_cat = 'Alimentação'
-                                        elif any(x in full_text for x in ['posto', 'combustivel', 'gasolina', 'auto']):
+                                        elif any(x in full_text for x in ['posto', 'combustivel', 'gasolina', 'auto', 'oficina', 'mecanica']):
                                             found_cat = 'Transporte'
-                                        elif any(x in full_text for x in ['restaurante', 'lanchonete', 'burger', 'pizza', 'ifood']):
+                                        elif any(x in full_text for x in ['restaurante', 'lanchonete', 'burger', 'pizza', 'ifood', 'delivery']):
                                             found_cat = 'Alimentação'
+                                        elif any(x in full_text for x in ['internet', 'telefonia', 'vivo', 'claro', 'tim', 'oi']):
+                                            found_cat = 'Contas Fixas'
                                         elif any(x in full_text for x in ['pagamento', 'boleto', 'conta']):
-                                             # Too generic, keep as Outros or maybe 'Contas'
                                              pass
-                                        
-                                        st.session_state["web_cache"][item_name] = found_cat
-                                        
-                                        if found_cat:
-                                            df.loc[df[desc_col] == item_name, 'Categoria'] = found_cat
-                                            
-                                    time.sleep(0.5) # Avoid rate limit
-                                except Exception as e:
-                                    print(f"Erro na busca web para {item_name}: {e}")
                                     
-                            progress_bar.empty()
+                                    # Save to cache even if None (to avoid re-searching)
+                                    st.session_state["web_cache"][item_name] = found_cat
+                                    
+                                    if found_cat:
+                                        df.loc[df[desc_col] == item_name, 'Categoria'] = found_cat
+                                        
+                                time.sleep(0.2) # Small delay
+                            except Exception as e:
+                                print(f"Erro busca: {e}")
+                                
+                        my_bar.empty()
 
                     # 2. Separate Groups
                     # Income: > 0
