@@ -1833,8 +1833,38 @@ def render_financial_view():
     st.markdown("## 📂 Organização Financeira")
     st.info("Faça upload de uma planilha (CSV) para análise de gastos com IA.")
 
-    # 1. Upload
-    uploaded_file = st.file_uploader("Upload CSV ou PDF Financeiro", type=["csv", "pdf"])
+    # ─── EXTRA TOOLS ───
+    with st.expander("🛠️ Ferramentas: Conversor PDF para CSV (IA Local)", expanded=False):
+        st.write("Transforme seus extratos em PDF (Nubank, Inter, Bradesco, etc) em planilhas Excel/CSV para editar antes de analisar.")
+        pdf_to_convert = st.file_uploader("Selecione o PDF para conversão", type=["pdf"], key="pdf_converter")
+        
+        if pdf_to_convert:
+            if st.button("🔄 Converter PDF em CSV"):
+                with st.spinner("Lendo documento com inteligência de padrões..."):
+                    try:
+                        df_converted = parse_pdf(pdf_to_convert)
+                        
+                        if not df_converted.empty:
+                            st.success(f"Sucesso! Encontrei {len(df_converted)} transações.")
+                            st.write("### Prévia do Resultado:")
+                            st.dataframe(df_converted.head(), use_container_width=True)
+                            
+                            csv_converted = df_converted.to_csv(index=False).encode('utf-8')
+                            st.download_button(
+                                label="💾 Baixar CSV Convertido",
+                                data=csv_converted,
+                                file_name=f"{pdf_to_convert.name.replace('.pdf','')}_convertido.csv",
+                                mime="text/csv",
+                                type="primary"
+                            )
+                        else:
+                            st.warning("Não consegui identificar padrões de extrato bancário neste PDF. Tente um arquivo diferente.")
+                    except Exception as e:
+                        st.error(f"Erro na conversão: {e}")
+
+    # 1. Main Analysis Upload
+    st.divider()
+    uploaded_file = st.file_uploader("Upload CSV ou PDF Financeiro para Análise", type=["csv", "pdf"])
     
     
     if uploaded_file:
