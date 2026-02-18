@@ -1746,6 +1746,11 @@ def parse_pdf(uploaded_file):
                 desc_parts = []
                 
                 # Traverse backwards to find the value
+                # We need to be careful about lines with multiple values (e.g. "R$ 0,00 R$ 100,00")
+                # Usually the last one is the transaction amount or balance.
+                # Use a specific regex to identify money-like tokens
+                # Matches: 1.200,00 | 1,200.00 | 50,00 | -50,00 | 50.00
+                
                 for i in range(len(parts) - 1, -1, -1):
                     part = parts[i]
                     # Clean part to check if float
@@ -1754,19 +1759,36 @@ def parse_pdf(uploaded_file):
                     if clean_part.startswith('-'):
                         clean_part = clean_part[1:]
                         
+                    # Basic digit check
                     if clean_part.replace('.', '', 1).isdigit():
-                        # Found a number!
                         try:
-                             # Re-parse logic to handle PT-BR format (1.000,00) or US (1,000.00)
                              val_str = part.replace('R$', '')
-                             # Check if it looks like PT-BR: comma at end (-3 position) or dot inside
-                             if ',' in val_str and val_str.rfind(',') > val_str.rfind('.'):
-                                  val_float = float(val_str.replace('.', '').replace(',', '.'))
+                             # Heuristic for PT-BR (comma as decimal separator)
+                             # Valid formats: 1.000,00 | 100,00 | 0,50
+                             if ',' in val_str:
+                                 # If dot is also present, it must be before comma (1.000,00)
+                                 if '.' in val_str and val_str.find('.') > val_str.find(','):
+                                     continue # Invalid format like 1,000.00 (US) interpreted as PT-BR text? 
+                                     # Actually let's just support PT-BR for now as it's the context
+                                 
+                                 val_float = float(val_str.replace('.', '').replace(',', '.'))
                              else:
-                                  val_float = float(val_str.replace(',', ''))
-                                  
+                                 # No comma. Could be 100 (int) or 100.00 (US).
+                                 # If it has a dot and it is at the end - 3, likely US.
+                                 # But if valid integer, assume integer.
+                                 val_float = float(val_str)
+
+                             # Filter out "Agencia/Conta" numbers that might look like money but aren't
+                             # e.g. "7212" -> 7212.0. If description contains "agência", ignore.
+                             
+                             # Let's check the rest of the line for "agência" or "conta" keywords
+                             line_lower = line.lower()
+                             if "agência" in line_lower or "conta" in line_lower or "saldo" in line_lower:
+                                  # Only skip if it looks like the header line from the screenshot
+                                  if "banco" in line_lower or "490." in line_lower: 
+                                      continue
+
                              value_found = val_float
-                             # Description is everything before this part
                              desc_parts = parts[:i]
                              break
                         except:
@@ -1774,10 +1796,15 @@ def parse_pdf(uploaded_file):
                 
                 if value_found is not None and desc_parts:
                     description = " ".join(desc_parts)
-                    # Cleanup dates from start of description (e.g., "12/05/2024 Uber...")
-                    # Regex for date: \d{2}/\d{2} or \d{2}/\d{2}/\d{4}
-                    description = re.sub(r'^\s*\d{2}/\d{2}(/\d{2,4})?\s+', '', description)
                     
+                    # Extra cleanup for description
+                    # Remove Date from start (DD/MM/YYYY or DD/MM)
+                    description = re.sub(r'^\d{2}/\d{2}(/\d{2,4})?', '', description).strip()
+                    
+                    # Ignore common useless lines
+                    if description.lower() in ["saldo do dia", "saldo anterior", "s a l d o", "total"]:
+                        continue
+                        
                     data.append({"Descrição": description, "Valor": value_found})
 
     if not data:
@@ -1866,12 +1893,16 @@ def render_financial_view():
                         st.metric("Maior Despesa", f"{biggest_name}", f"R$ {biggest_val:,.2f}")
                         
                     # Charts
+                    # Charts
                     if not category_totals.empty:
-                        fig = go.Figure(data=[go.Pie(labels=category_totals["Categoria"], values=category_totals[val_col], hole=.3)])
-                        fig.update_layout(title_text="Distribuição de Gastos por Categoria", **CHART_LAYOUT)
+                        # Bar Chart as requested
+                        st.subheader("Gráfico de Gastos (Barra)")
+                        fig = px.bar(category_totals, x="Categoria", y=val_col, text_auto='.2s', color="Categoria", title="Gastos por Categoria (R$)")
+                        fig.update_layout(showlegend=False, **CHART_LAYOUT)
                         st.plotly_chart(fig, use_container_width=True)
                         
                         st.write("### Detalhamento por Categoria")
+                        # Format column to currency
                         st.dataframe(category_totals.style.format({val_col: "R$ {:,.2f}"}), use_container_width=True)
                         
                     with st.expander("Ver Tabela Completa Classificada"):
@@ -1892,22 +1923,33 @@ def main():
     st.markdown(
         """
         <style>
-        div.row-widget.stButton > button {
+        div.stButton > button {
             width: 100%;
-            border-radius: 0px;
-            height: 3em;
-            background-color: transparent;
-            border: none;
-            border-bottom: 2px solid transparent;
+            border-radius: 20px;
+            height: auto;
+            padding: 0.5rem 1rem;
+            background-color: white;
+            border: 1px solid #e0e0e0;
             color: #555;
             font-weight: 600;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
         }
-        div.row-widget.stButton > button:hover {
+        div.stButton > button:hover {
             color: #000;
-            background-color: #f0f2f6;
+            border-color: #ccc;
+            background-color: #f8f9fa;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
-        div.row-widget.stButton > button:focus {
-            box-shadow: none;
+        div.stButton > button:focus {
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+            color: #000;
+        }
+        /* Highlight active button */
+        div.stButton > button[kind="primary"] {
+            background-color: #f0f2f6;
+            border-color: #d1d5db;
             color: #000;
         }
         </style>
@@ -1915,14 +1957,12 @@ def main():
     )
     
     # Header/Navbar
-    # Using a container with custom styling for the navbar background
+    # We use a container but remove the HTML wrapper that breaks layout
     with st.container():
-        st.markdown('<div class="navbar" style="padding-bottom: 0px; margin-bottom: 10px; display:block;">', unsafe_allow_html=True)
-        
-        c1, c2, c3 = st.columns([1, 2, 2])
+        c1, c2, c3 = st.columns([0.5, 2, 2])
         
         with c1:
-             st.markdown('<div style="font-size: 24px;">🧮</div>', unsafe_allow_html=True)
+             st.markdown('<div style="font-size: 28px; padding-top: 5px;">🧮</div>', unsafe_allow_html=True)
              
         with c2:
             if st.button("Calculadora de Venda", type="primary" if st.session_state["current_view"] == "calculator" else "secondary", use_container_width=True):
@@ -1933,8 +1973,8 @@ def main():
             if st.button("Organização Financeira", type="primary" if st.session_state["current_view"] == "financial" else "secondary", use_container_width=True):
                 st.session_state["current_view"] = "financial"
                 st.rerun()
-                
-        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.divider()
 
     # View Routing
     if st.session_state["current_view"] == "calculator":
