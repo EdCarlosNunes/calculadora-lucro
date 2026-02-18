@@ -1911,19 +1911,14 @@ def render_financial_view():
 
                     # ─── DATA ANALYSIS & PROCESSING ───
                     
-                    # 1. Separate Income & Expenses
-                    df_income = df[df[val_col] > 0].copy()
-                    df_expense = df[df[val_col] < 0].copy()
+                    # ─── DATA ANALYSIS & PROCESSING ───
                     
-                    # Convert expenses to positive for visualization/sum where needed, but keep track they are outflows
-                    # actually for the logic of "total spent" we usually sum the absolute value of negatives
-                    total_income = df_income[val_col].sum()
-                    total_expense = df_expense[val_col].abs().sum()
-                    balance = total_income - total_expense
-                    
-                    # 2. Categorization (Focus on Expenses)
+                    # 1. Categorization Logic (Define FIRST to use in filtering)
                     def categorize(desc):
                         desc = str(desc).lower()
+                        # Investments (NEW)
+                        if any(x in desc for x in ['cdb', 'lci', 'lca', 'tesouro', 'aplicacao', 'poupanca', 'b3', 'corretora', 'fundo', 'ativo', 'investimento', 'banco inter', 'nu invest', 'clear', 'rico', 'xp']):
+                            return 'Investimento'
                         if any(x in desc for x in ['facebook', 'google', 'ads', 'anuncio', 'marketing', 'propaganda']):
                             return 'Marketing'
                         if any(x in desc for x in ['uber', '99', 'posto', 'gasolina', 'estacionamento', 'transporte']):
@@ -1938,14 +1933,40 @@ def render_financial_view():
                             return 'Pessoal'
                         return 'Outros'
 
-                    df_expense['Categoria'] = df_expense[desc_col].apply(categorize)
-                    df_income['Categoria'] = 'Entrada' # Simple categorization for income
+                    df['Categoria'] = df[desc_col].apply(categorize)
+
+                    # 2. Separate Groups
+                    # Income: > 0
+                    df_income = df[df[val_col] > 0].copy()
                     
-                    # Aggregations for Expenses
-                    # Fix: groupby().sum() returns a Series, then we use abs()
+                    # Outflows: < 0
+                    df_outflows = df[df[val_col] < 0].copy()
+                    
+                    # Split Outflows into Expenses vs Investments
+                    df_investment = df_outflows[df_outflows['Categoria'] == 'Investimento'].copy()
+                    df_expense = df_outflows[df_outflows['Categoria'] != 'Investimento'].copy()
+                    
+                    # 3. Calculations
+                    total_income = df_income[val_col].sum()
+                    
+                    # Total actually spent (burned)
+                    total_expense = df_expense[val_col].abs().sum()
+                    
+                    # Total saved/invested
+                    total_invested = df_investment[val_col].abs().sum()
+                    
+                    # Balance (Cash Flow: Income - All Outflows)
+                    # Note: From a cash flow perspective, money left the account so it affects the immediate balance.
+                    # But for "Wealth" perspective, it's still yours.
+                    # Let's show "Saldo em Conta" (Cash flow) and "Resultado Operacional" (Income - Expenses)
+                    
+                    total_outflow = total_expense + total_invested
+                    balance = total_income - total_outflow
+                    
+                    # Aggregations for Expenses (visuals)
                     category_totals = df_expense.groupby('Categoria')[val_col].sum().abs().reset_index().sort_values(by=val_col, ascending=False)
                     
-                    # Find Biggest Expense
+                    # Find Biggest Expense (excluding investments)
                     if not df_expense.empty:
                         biggest_expense_row = df_expense.loc[df_expense[val_col].idxmin()] # min because it's negative
                         biggest_expense_name = biggest_expense_row[desc_col]
@@ -1961,33 +1982,41 @@ def render_financial_view():
                     # Determine Financial Health
                     if balance > 0:
                         health_status = "Positivo ✅"
-                        health_msg = f"Parabéns! Você fechou com um saldo positivo de **R$ {balance:,.2f}**. Isso indica uma boa saúde financeira neste período."
+                        health_msg = f"Você fechou o período com **R$ {balance:,.2f}** em conta."
                     elif balance < 0:
                         health_status = "Negativo ⚠️"
-                        health_msg = f"Atenção! Suas despesas superaram suas receitas em **R$ {abs(balance):,.2f}**. É importante rever gastos não essenciais."
+                        health_msg = f"Sua conta fechou negativa em **R$ {abs(balance):,.2f}** (considerando gastos + investimentos)."
                     else:
                         health_status = "Neutro ⚖️"
-                        health_msg = "Você fechou exatamente no zero a zero."
+                        health_msg = "Sua conta fechou no zero a zero."
+
+                    # Investment kudos
+                    inv_msg = ""
+                    if total_invested > 0:
+                        inv_msg = f"🚀 **Parabéns!** Você investiu **R$ {total_invested:,.2f}** neste período. Isso é construção de patrimônio, não gasto!"
 
                     # Dynamic Text
                     analysis_text = f"""
-                    > **Resumo Geral:**
-                    > Neste período, houve uma entrada total de **R$ {total_income:,.2f}** e saídas no total de **R$ {total_expense:,.2f}**.
-                    > O resultado final foi **{health_status}**.
+                    > **Resumo do Analista:**
+                    > Receitas: **R$ {total_income:,.2f}**
+                    > Despesas Reais: **R$ {total_expense:,.2f}**
+                    > Investimentos: **R$ {total_invested:,.2f}**
                     >
                     > {health_msg}
+                    > {inv_msg}
                     >
-                    > **Destaque de Gastos:**
-                    > A sua maior despesa única foi com **"{biggest_expense_name}"**, no valor de **R$ {biggest_expense_val:,.2f}**.
-                    > No total, a categoria que mais pesou no bolso foi **{category_totals.iloc[0]['Categoria'] if not category_totals.empty else 'N/A'}**.
+                    > **Raio-X das Despesas:**
+                    > Maior gasto único: **"{biggest_expense_name}"** (R$ {biggest_expense_val:,.2f}).
+                    > Categoria mais pesada: **{category_totals.iloc[0]['Categoria'] if not category_totals.empty else 'N/A'}**.
                     """
                     st.markdown(analysis_text)
                     
                     # ─── KPI CARDS ───
-                    k1, k2, k3 = st.columns(3)
+                    k1, k2, k3, k4 = st.columns(4)
                     k1.metric("💰 Receitas", f"R$ {total_income:,.2f}", delta_color="normal")
                     k2.metric("💸 Despesas", f"R$ {total_expense:,.2f}", delta="-"+f"R$ {total_expense:,.2f}", delta_color="inverse")
-                    k3.metric("⚖️ Saldo Final", f"R$ {balance:,.2f}", delta=f"{balance:,.2f}")
+                    k3.metric("📈 Investido", f"R$ {total_invested:,.2f}", delta=f"{(total_invested/total_income)*100:.1f}%" if total_income > 0 else "")
+                    k4.metric("⚖️ Saldo Final", f"R$ {balance:,.2f}", delta=f"{balance:,.2f}")
 
                     # ─── CHARTS (Expenses) ───
                     if not category_totals.empty:
@@ -1997,7 +2026,7 @@ def render_financial_view():
                          c_chart, c_table = st.columns([2, 1])
                          
                          with c_chart:
-                            fig = px.bar(category_totals, x="Categoria", y=val_col, text_auto='.2s', color="Categoria", title="Gastos por Categoria")
+                            fig = px.bar(category_totals, x="Categoria", y=val_col, text_auto='.2s', color="Categoria", title="Gastos por Categoria (Exceto Investimentos)")
                             fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Valor (R$)")
                             st.plotly_chart(fig, use_container_width=True)
                          
@@ -2009,7 +2038,7 @@ def render_financial_view():
                     st.divider()
                     st.subheader("📋 Extrato Detalhado")
                     
-                    tab_in, tab_out = st.tabs(["🟢 Entradas (Receitas)", "🔴 Saídas (Despesas)"])
+                    tab_in, tab_out, tab_inv = st.tabs(["🟢 Entradas", "🔴 Despesas", "📈 Investimentos"])
                     
                     with tab_in:
                         if not df_income.empty:
@@ -2019,18 +2048,28 @@ def render_financial_view():
                                 hide_index=True
                             )
                         else:
-                            st.info("Nenhuma entrada registrada neste período.")
+                            st.info("Nenhuma entrada registrada.")
                             
                     with tab_out:
                         if not df_expense.empty:
-                            # Show category too
                             st.dataframe(
                                 df_expense[[desc_col, 'Categoria', val_col]].rename(columns={desc_col: "Descrição", val_col: "Valor"}).sort_values(by="Valor", ascending=True).style.format({"Valor": "R$ {:,.2f}"}),
                                 use_container_width=True,
                                 hide_index=True
                             )
                         else:
-                            st.info("Nenhuma despesa registrada neste período.")
+                            st.info("Nenhuma despesa registrada.")
+
+                    with tab_inv:
+                         if not df_investment.empty:
+                            st.success(f"Total Investido: R$ {total_invested:,.2f}")
+                            st.dataframe(
+                                df_investment[[desc_col, val_col]].rename(columns={desc_col: "Descrição", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                         else:
+                            st.info("Nenhum investimento identificado neste período.")
 
                         
         except Exception as e:
