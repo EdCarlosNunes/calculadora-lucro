@@ -2238,50 +2238,59 @@ def main():
     st.markdown(
         """
         <style>
-        /* Hide default radio circles */
-        div[role="radiogroup"] > label > div:first-child {
+        /* 1. Hide the default radio circles/inputs */
+        div[role="radiogroup"] label input {
+            display: none !important;
+        }
+        div[role="radiogroup"] label > div:first-child {
             display: none !important;
         }
         
-        /* Container for the segmented control */
+        /* 2. Style the Container (The gray pill track) */
         div[role="radiogroup"] {
-            background-color: #f0f2f6;
-            padding: 4px;
-            border-radius: 12px;
+            background-color: #eeeeef; /* iOS Light Gray Track */
+            padding: 3px;
+            border-radius: 8px; /* Rounded pill */
             display: flex;
             justify-content: center;
-            margin-bottom: 20px;
             width: fit-content;
-            margin-left: auto;
-            margin-right: auto;
+            margin: 0 auto 20px auto;
+            border: 1px solid #e0e0e0;
         }
         
-        /* Default state for options (looks like potential tabs) */
+        /* 3. Style the Option Labels (The clickable items) */
         div[role="radiogroup"] label {
             background-color: transparent;
-            padding: 8px 24px;
-            border-radius: 8px;
+            padding: 8px 30px; /* Wider click area */
+            border-radius: 6px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s cubic-bezier(0.4,0,0.2,1); /* Smooth snap */
             text-align: center;
             border: none;
-            margin: 0 2px;
-            color: #555;
+            margin: 0;
+            color: #636366; /* iOS Gray Text */
             font-weight: 500;
+            font-size: 14px;
+            flex: 1; /* Equal width */
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
-        /* Hover state */
+        /* 4. Hover State */
         div[role="radiogroup"] label:hover {
-            color: #000;
-            background-color: rgba(255,255,255,0.5);
+            opacity: 0.8;
         }
         
-        /* Selected state is tricky to target without :has, but Streamlit adds data-checked */
-        /* Since we can't easily target the specific label for "Checked" via pure CSS in all browsers efficiently without :has,
-           we rely on the fact that Streamlit renders the active one slightly differently or we stick to a simpler style.
-           
-           Actually, let's use a simpler approach: Just make it look like a clean horizontal menu.
-        */
+        /* 5. SELECTED STATE (Magic with :has) */
+        /* Takes effect when the input inside is checked */
+        div[role="radiogroup"] label:has(input:checked) {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            font-weight: 600;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.12), 0 3px 1px rgba(0,0,0,0.04); /* iOS Shadow */
+            border: 0.5px solid rgba(0,0,0,0.04);
+        }
         </style>
         """, unsafe_allow_html=True
     )
