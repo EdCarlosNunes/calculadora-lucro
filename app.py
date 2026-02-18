@@ -1834,7 +1834,28 @@ def render_financial_view():
     if uploaded_file:
         try:
             if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
+                try:
+                    # Try default (comma)
+                    df = pd.read_csv(uploaded_file)
+                except Exception:
+                    # Try semicolon (common in BR)
+                    uploaded_file.seek(0)
+                    try:
+                        df = pd.read_csv(uploaded_file, sep=';')
+                    except Exception:
+                        # Try auto-detect engine
+                        uploaded_file.seek(0)
+                        try:
+                            df = pd.read_csv(uploaded_file, sep=None, engine='python')
+                        except Exception as e:
+                            # If all fails, maybe it has metadata rows? Try skipping lines
+                            uploaded_file.seek(0)
+                            try:
+                                # Try skipping first few lines if they are metadata
+                                df = pd.read_csv(uploaded_file, sep=';', skiprows=1)
+                            except:
+                                st.error(f"Erro ao ler CSV: {e}. Tente abrir no Excel e salvar como 'CSV (separado por vírgulas)'.")
+                                df = pd.DataFrame() # Stop processing
             elif uploaded_file.name.endswith('.pdf'):
                 with st.spinner("📄 Lendo PDF..."):
                     df = parse_pdf(uploaded_file)
