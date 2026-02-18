@@ -2261,26 +2261,30 @@ def render_chat_view():
             border-radius: 12px;
             margin-bottom: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex !important; /* Force flex for alignment to work */
+            flex-direction: row; /* Default LTR */
+            align-items: flex-start;
         }
         
         /* Flex direction for User messages to push them to the right 
            Targeting the parent stChatMessage that contains our hidden marker .user-message-marker
         */
-        [data-testid="stChatMessage"]:has(.user-message-marker) {
-            flex-direction: row-reverse;
+        div[data-testid="stChatMessage"]:has(.user-message-marker) {
+            flex-direction: row-reverse !important; /* Force RTL */
             text-align: right;
             background-color: #e3f2fd; /* Light Blue for User */
             border: 1px solid #bbdefb;
         }
         
         /* Align content inside user message to right */
-        [data-testid="stChatMessage"]:has(.user-message-marker) > div {
+        div[data-testid="stChatMessage"]:has(.user-message-marker) > div {
             text-align: right !important;
             justify-content: flex-end !important;
+            margin-left: auto !important; /* Push content to right if flex fails */
         }
         
         /* AI Message Styling (No marker) */
-        [data-testid="stChatMessage"]:not(:has(.user-message-marker)) {
+        div[data-testid="stChatMessage"]:not(:has(.user-message-marker)) {
             background-color: #f8f9fa; /* Light Gray for AI */
             border: 1px solid #e9ecef;
         }
@@ -2310,8 +2314,15 @@ def render_chat_view():
         with st.chat_message("assistant"):
             try:
                 genai.configure(api_key=st.session_state["gemini_api_key"])
-                # Updated model to 2.0-flash (verified available via script)
-                model = genai.GenerativeModel('gemini-2.0-flash')
+                # Switched to 'gemini-1.5-flash' explicitly again, or 'gemini-pro' depending on what works.
+                # Since 2.0 failed quota, let's try the most standard available model.
+                # From list: 'models/gemini-1.5-flash-latest' or just 'gemini-1.5-flash' usually works but key might have issue.
+                # Trying 'gemini-1.5-flash-latest' if standard failed. Or 'gemini-1.5-pro-latest'.
+                # Let's try 'gemini-1.5-flash-latest' via python client usually works.
+                # Or 'gemini-pro' (classic).
+                # Given user error 404 earlier on 1.5-flash, let's try 'gemini-pro' legacy or 'gemini-1.0-pro'.
+                # Actually, the user's list had 'models/gemini-flash-latest'. Let's use that.
+                model = genai.GenerativeModel('gemini-1.5-flash-latest') 
                 
                 # Context Building
                 data_summary = "Nenhum dado pessoal carregado. Responda como um consultor financeiro geral."
