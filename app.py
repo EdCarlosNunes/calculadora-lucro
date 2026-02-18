@@ -2230,6 +2230,107 @@ def render_financial_view():
             st.error(f"Erro ao processar arquivo: {e}")
 
 
+
+def render_chat_view():
+    st.markdown("## 💬 Chat Financeiro (IA)")
+    
+    # 1. API Key Setup
+    if "gemini_api_key" not in st.session_state:
+        st.session_state["gemini_api_key"] = ""
+    
+    with st.expander("🔑 Configurar Chave da API (Gemini)", expanded=not st.session_state["gemini_api_key"]):
+        st.info("Para usar o chat, você precisa de uma API Key do Google (é grátis!). Obtenha em: [aistudio.google.com](https://aistudio.google.com/app/apikey)")
+        api_key = st.text_input("Cole sua API Key aqui:", value=st.session_state["gemini_api_key"], type="password")
+        if st.button("Salvar Chave", key="save_api_key"): # Added unique key just in case
+            st.session_state["gemini_api_key"] = api_key
+            st.success("Chave salva!")
+            st.rerun()
+
+    if not st.session_state["gemini_api_key"]:
+        st.warning("⚠️ Por favor, insira sua chave da API acima para começar.")
+        return
+
+    # 2. Context Loading
+    if "finance_df" not in st.session_state or st.session_state["finance_df"].empty:
+        st.warning("📂 Nenhum dado financeiro encontrado. Por favor, vá em 'Organização Financeira' e carregue um arquivo primeiro.")
+        return
+        
+    df = st.session_state["finance_df"]
+    
+    # 3. Chat Interface
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = []
+
+    for message in st.session_state["messages"]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if prompt := st.chat_input("Pergunte sobre seus gastos (ex: Quanto gastei com Uber? Qual o total de receitas?)"):
+        # Display user message
+        st.session_state["messages"].append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Generate Answer
+        with st.chat_message("assistant"):
+            try:
+                genai.configure(api_key=st.session_state["gemini_api_key"])
+                model = genai.GenerativeModel('gemini-pro')
+                
+                # Context Building
+                # We summarize the DF to avoid sending too much tokens if large
+                # Check if we have processed columns
+                desc_col = next((c for c in df.columns if "desc" in c.lower() or "nome" in c.lower()), None)
+                val_col = next((c for c in df.columns if "valor" in c.lower() or "value" in c.lower()), None)
+                date_col = next((c for c in df.columns if "data" in c.lower() or "date" in c.lower()), None)
+                
+                if desc_col and val_col:
+                     # Analyze breakdown
+                     total_in = df[df[val_col] > 0][val_col].sum()
+                     total_out = df[df[val_col] < 0][val_col].sum()
+                     
+                     # Top 5 expenses
+                     top_5 = df[df[val_col] < 0].sort_values(by=val_col).head(5)
+                     top_5_str = top_5[[desc_col, val_col]].to_string(index=False)
+                     
+                     data_summary = f"""
+                     CONTEXTO FINANCEIRO DO USUÁRIO:
+                     - Total Receitas: R$ {total_in:.2f}
+                     - Total Despesas: R$ {total_out:.2f}
+                     - Saldo: R$ {total_in + total_out:.2f}
+                     - Colunas Disponíveis: {list(df.columns)}
+                     
+                     Amostra (Top 5 Maiores Gastos):
+                     {top_5_str}
+                     
+                     Amostra Geral (Primeiras 10 linhas):
+                     {df.head(10).to_string(index=False)}
+                     """
+                else:
+                    data_summary = f"Dados brutos: {df.head(20).to_string()}"
+
+                full_prompt = f"""
+                Você é um analista financeiro pessoal, gentil e preciso.
+                Use os dados abaixo para responder à pergunta do usuário.
+                Se não souber, diga que não encontrou nos dados.
+                Seja conciso.
+                
+                DADOS:
+                {data_summary}
+                
+                PERGUNTA: {prompt}
+                """
+                
+                response = model.generate_content(full_prompt)
+                response_text = response.text
+                
+                st.write(response_text) # Use st.write for markdown support
+                st.session_state["messages"].append({"role": "assistant", "content": response_text})
+                
+            except Exception as e:
+                st.error(f"Erro na IA: {e}")
+
+
 def main():
     inject_css()
     
