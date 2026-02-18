@@ -2251,6 +2251,41 @@ def render_chat_view():
     else:
         st.info("💡 Modo Consultor Geral: Carregue seus dados na aba 'Organização Financeira' para uma análise personalizada.", icon="💡")
     
+    # CSS for Chat Bubbles (User Right, AI Left)
+    st.markdown(
+        """
+        <style>
+        /* General Chat Message styling */
+        [data-testid="stChatMessage"] {
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        /* Flex direction for User messages to push them to the right */
+        [data-testid="stChatMessage"]:has(div[aria-label="user"]) {
+            flex-direction: row-reverse;
+            text-align: right;
+            background-color: #e3f2fd; /* Light Blue for User */
+            border: 1px solid #bbdefb;
+        }
+        
+        /* Align content inside user message to right */
+        [data-testid="stChatMessage"]:has(div[aria-label="user"]) > div {
+            text-align: right !important;
+            justify-content: flex-end !important;
+        }
+        
+        /* AI Message Styling */
+        [data-testid="stChatMessage"]:has(div[aria-label="assistant"]) {
+            background-color: #f8f9fa; /* Light Gray for AI */
+            border: 1px solid #e9ecef;
+        }
+        </style>
+        """, unsafe_allow_html=True
+    )
+
     # 3. Chat Interface
     if "messages" not in st.session_state:
         st.session_state["messages"] = []
@@ -2269,7 +2304,8 @@ def render_chat_view():
         with st.chat_message("assistant"):
             try:
                 genai.configure(api_key=st.session_state["gemini_api_key"])
-                model = genai.GenerativeModel('gemini-pro')
+                # Updated model to Flash (faster/newer) to fix 404 error
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
                 # Context Building
                 data_summary = "Nenhum dado pessoal carregado. Responda como um consultor financeiro geral."
