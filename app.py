@@ -3,7 +3,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 import time
-import google.generativeai as genai
+
 import os
 
 # ─────────────────────────────────────────────────────────────
@@ -1725,8 +1725,6 @@ def render_financial_view():
     # 1. Upload
     uploaded_file = st.file_uploader("Upload CSV Financeiro", type=["csv"])
     
-    # 2. API Key (Password)
-    api_key = st.text_input("🔑 Google Gemini API Key", type="password", help="Obtenha sua chave no Google AI Studio.")
     
     if uploaded_file:
         try:
@@ -1734,86 +1732,76 @@ def render_financial_view():
             st.write("### 🔍 Prévia dos Dados")
             st.dataframe(df.head(), use_container_width=True)
             
-            if api_key and st.button("🚀 Analisar com IA", type="primary"):
-                with st.spinner("🤖 A IA está analisando seus gastos..."):
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-1.5-pro')
-                    
-                    # Convert sample to CSV string for prompt
-                    csv_string = df.to_csv(index=False)
-                    
-                    prompt = f"""
-                    Você é um analista financeiro experiente. Analise os dados financeiros abaixo (formato CSV).
-                    
-                    TAREFAS:
-                    1. Identifique as colunas de 'Descrição/Empresa' e 'Valor'. Se não estiver claro, tente inferir.
-                    2. Categorize cada transação em categorias úteis (ex: Marketing, Fornecedores, Impostos, Logística, Pessoal, Outros).
-                    3. Gere um resumo com:
-                       - Total Gasto
-                       - Maior Despesa (Nome e Valor)
-                       - Gasto por Categoria (Totais)
-                    
-                    DADOS CSV:
-                    {csv_string}
-                    
-                    FORMATO DE RESPOSTA (JSON):
-                    Retorne APENAS um JSON válido seguindo esta estrutura, sem markdown (```json ... ```):
-                    {{
-                        "total_spent": float,
-                        "biggest_expense": {{ "name": string, "value": float }},
-                        "categories": {{ "Category Name": float, ... }},
-                        "analysis_summary": "Breve texto descrevendo os principais insights."
-                    }}
-                    """
-                    
+            # Button is just "Analisar", no API key needed
+            if st.button("🚀 Analisar Arquivo", type="primary"):
+                # Normalize columns to find 'Description' and 'Value'
+                cols = [c.lower() for c in df.columns]
+                
+                desc_col = next((c for c in df.columns if "desc" in c.lower() or "nome" in c.lower() or "empresa" in c.lower() or "historico" in c.lower()), None)
+                val_col = next((c for c in df.columns if "valor" in c.lower() or "value" in c.lower() or "amount" in c.lower() or "preço" in c.lower()), None)
+                
+                if not desc_col or not val_col:
+                    st.error("Não foi possível identificar automaticamente as colunas de 'Descrição' e 'Valor'. Verifique se o CSV tem cabeçalhos como 'Descrição', 'Empresa', 'Valor', 'Amount'.")
+                else:
+                    # Clean values (remove R$, replace comma with dot)
                     try:
-                        response = model.generate_content(prompt)
-                        result_text = response.text
-                        
-                        # Cleanup markdown code blocks if present
-                        if "```json" in result_text:
-                            import re
-                            match = re.search(r"```json\s*(.*?)\s*```", result_text, re.DOTALL)
-                            if match:
-                                result_text = match.group(1)
-                        elif "```" in result_text:
-                             match = re.search(r"```\s*(.*?)\s*```", result_text, re.DOTALL)
-                             if match:
-                                result_text = match.group(1)
-                                
-                        import json
-                        data = json.loads(result_text)
-                        
-                        # Display Results
-                        st.divider()
-                        st.subheader("📊 Relatório Financeiro Inteligente")
-                        
-                        kpi1, kpi2 = st.columns(2)
-                        with kpi1:
-                            st.metric("Total Gasto", f"R$ {data.get('total_spent', 0):,.2f}")
-                        with kpi2:
-                            biggest = data.get('biggest_expense', {})
-                            st.metric("Maior Despesa", f"{biggest.get('name', 'N/A')}", f"R$ {biggest.get('value', 0):,.2f}")
-                            
-                        st.caption(data.get("analysis_summary", ""))
-                        
-                        # Charts
-                        cats = data.get("categories", {})
-                        if cats:
-                            # Convert to DF for chart
-                            cat_df = pd.DataFrame(list(cats.items()), columns=["Categoria", "Valor"])
-                            
-                            fig = go.Figure(data=[go.Pie(labels=cat_df["Categoria"], values=cat_df["Valor"], hole=.3)])
-                            fig.update_layout(title_text="Distribuição de Gastos por Categoria", **CHART_LAYOUT)
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            st.bar_chart(cat_df.set_index("Categoria"))
+                        if df[val_col].dtype == 'object':
+                             df[val_col] = df[val_col].astype(str).str.replace('R$', '', regex=False).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        df[val_col] = pd.to_numeric(df[val_col])
+                    except:
+                        st.warning("Houve um problema ao converter os valores para número. Verifique se estão no formato correto (ex: 1200,50).")
 
-                    except Exception as e:
-                        st.error(f"Erro na análise da IA: {e}")
+                    # Categorization Logic
+                    def categorize(desc):
+                        desc = str(desc).lower()
+                        if any(x in desc for x in ['facebook', 'google', 'ads', 'anuncio', 'marketing', 'propaganda']):
+                            return 'Marketing'
+                        if any(x in desc for x in ['uber', '99', 'posto', 'gasolina', 'estacionamento', 'transporte']):
+                            return 'Transporte/Logística'
+                        if any(x in desc for x in ['aws', 'host', 'site', 'software', 'ferramenta', 'adobe', 'chatgpt', 'openai']):
+                            return 'Software/Serviços'
+                        if any(x in desc for x in ['imposto', 'das', 'darf', 'inss', 'simples', 'guia']):
+                            return 'Impostos'
+                        if any(x in desc for x in ['ifood', 'restaurante', 'cafe', 'almoco', 'jantar', 'mercado']):
+                            return 'Alimentação'
+                        if any(x in desc for x in ['salario', 'prolabore', 'funcionario', 'pagamento']):
+                            return 'Pessoal'
+                        return 'Outros'
+
+                    df['Categoria'] = df[desc_col].apply(categorize)
+                    
+                    # Aggregations
+                    total_spent = df[val_col].sum()
+                    biggest_idx = df[val_col].idxmax()
+                    biggest_name = df.loc[biggest_idx, desc_col]
+                    biggest_val = df.loc[biggest_idx, val_col]
+                    
+                    category_totals = df.groupby('Categoria')[val_col].sum().reset_index()
+                    
+                    # Display Results
+                    st.divider()
+                    st.subheader("📊 Relatório Financeiro (Local)")
+                    
+                    kpi1, kpi2 = st.columns(2)
+                    with kpi1:
+                        st.metric("Total Gasto", f"R$ {total_spent:,.2f}")
+                    with kpi2:
+                        st.metric("Maior Despesa", f"{biggest_name}", f"R$ {biggest_val:,.2f}")
+                        
+                    # Charts
+                    if not category_totals.empty:
+                        fig = go.Figure(data=[go.Pie(labels=category_totals["Categoria"], values=category_totals[val_col], hole=.3)])
+                        fig.update_layout(title_text="Distribuição de Gastos por Categoria", **CHART_LAYOUT)
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        st.write("### Detalhamento por Categoria")
+                        st.dataframe(category_totals.style.format({val_col: "R$ {:,.2f}"}), use_container_width=True)
+                        
+                    with st.expander("Ver Tabela Completa Classificada"):
+                        st.dataframe(df, use_container_width=True)
                         
         except Exception as e:
-            st.error(f"Erro ao ler CSV: {e}")
+            st.error(f"Erro ao processar arquivo: {e}")
 
 
 def main():
