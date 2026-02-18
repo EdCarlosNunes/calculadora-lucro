@@ -2236,8 +2236,9 @@ def render_chat_view():
     
     # 1. API Key Setup
     if "gemini_api_key" not in st.session_state:
-        st.session_state["gemini_api_key"] = ""
+        st.session_state["gemini_api_key"] = "AIzaSyDa48eCwlAmnw0xrFXQZJaNzzH97I5MvPk"
     
+    # We hide the key setup if it's already configured to keep UI clean
     with st.expander("🔑 Configurar Chave da API (Gemini)", expanded=not st.session_state["gemini_api_key"]):
         st.info("Para usar o chat, você precisa de uma API Key do Google (é grátis!). Obtenha em: [aistudio.google.com](https://aistudio.google.com/app/apikey)")
         api_key = st.text_input("Cole sua API Key aqui:", value=st.session_state["gemini_api_key"], type="password")
