@@ -904,11 +904,17 @@ def render_results(result: dict, title: str = "📊 Resultados por Venda"):
     # OR we can use a custom logic. User asked for Green if positive, Red if negative.
     # st.metric(..., delta=value) works perfectly for this.
     
+    # User requested to remove redundancy. We will remove the text duplication but keep the color logic.
+    # Streamlit's delta logic is tied to the value passed.
+    # If we pass a string with a space " ", it might show just the arrow/color.
+    # Let's try passing a small indicator like " " or "." to just trigger color.
+    # Or, we can accept that "Redundancy" refers to the double number.
+    
     with kpi1:
         st.metric(
             label="Lucro Líquido",
             value=f"R$ {profit:,.2f}",
-            delta=f"{profit:,.2f} R$",
+            delta=" " if profit >= 0 else "- ", # Trick to show color without number redundancy
             delta_color="normal" # Green for positive, Red for negative
         )
     
@@ -916,7 +922,7 @@ def render_results(result: dict, title: str = "📊 Resultados por Venda"):
         st.metric(
             label="Margem de Lucro",
             value=f"{result['margin']:.1f}%",
-            delta=f"{result['margin']:.1f}%",
+            delta=" " if result['margin'] >= 0 else "- ",
             delta_color="normal"
         )
 
@@ -924,7 +930,7 @@ def render_results(result: dict, title: str = "📊 Resultados por Venda"):
         st.metric(
             label="ROI",
             value=f"{result['roi']:.2f}",
-            delta=f"{result['roi']:.2f}",
+            delta=" " if result['roi'] >= 0 else "- ",
             delta_color="normal"
         )
     
@@ -932,23 +938,16 @@ def render_results(result: dict, title: str = "📊 Resultados por Venda"):
 
     # Accumulate HTML for cards
     cards_html = ""
-    cards_html += render_result_card(
-        "Lucro Líquido",
-        f"R$ {profit:,.2f}",
-        color,
-        "por venda",
-    )
+    # Removed generic "Lucro Líquido" card to avoid duplication with KPI
+    
     cards_html += render_result_card(
         "Preço Sugerido",
         f"R$ {result['suggested_price']:,.2f}",
         "neutral",
         "baseado na margem",
     )
-    cards_html += render_result_card(
-        "Margem Líquida",
-        f"{result['margin']:.1f}%",
-        color,
-    )
+    # Removed generic "Margem Líquida" card to avoid duplication with KPI
+
     cards_html += render_result_card(
         "Tarifas Totais",
         f"R$ {result['total_fees']:,.2f}",
