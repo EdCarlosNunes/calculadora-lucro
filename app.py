@@ -1983,7 +1983,13 @@ def render_financial_view():
                     # Let's show "Saldo em Conta" (Cash flow) and "Resultado Operacional" (Income - Expenses)
                     
                     total_outflow = total_expense + total_invested
-                    balance = total_income - total_outflow
+                    
+                    # Balance Definitions
+                    # Saldo Operacional: Income - Actual Expenses (This is what the user calls "Positivo")
+                    balance = total_income - total_expense 
+                    
+                    # Liquid Balance: What is actually left in the checking account after investing
+                    liquid_balance = total_income - (total_expense + total_invested)
                     
                     # Aggregations for Expenses (visuals)
                     category_totals = df_expense.groupby('Categoria')[val_col].sum().abs().reset_index().sort_values(by=val_col, ascending=False)
@@ -2001,28 +2007,31 @@ def render_financial_view():
                     st.divider()
                     st.subheader("🤖 Analista Financeiro Virtual")
                     
-                    # Determine Financial Health
+                    # Determine Financial Health based on OPERATIONAL Balance
                     if balance > 0:
                         health_status = "Positivo ✅"
-                        health_msg = f"Você fechou o período com **R$ {balance:,.2f}** em conta."
+                        health_msg = f"Você gerou um superávit de **R$ {balance:,.2f}** (Receitas - Despesas)."
                     elif balance < 0:
                         health_status = "Negativo ⚠️"
-                        health_msg = f"Sua conta fechou negativa em **R$ {abs(balance):,.2f}** (considerando gastos + investimentos)."
+                        health_msg = f"Suas despesas superaram as receitas em **R$ {abs(balance):,.2f}**."
                     else:
                         health_status = "Neutro ⚖️"
-                        health_msg = "Sua conta fechou no zero a zero."
+                        health_msg = "Você fechou no zero a zero (gastou tudo o que ganhou)."
 
                     # Investment kudos
                     inv_msg = ""
                     if total_invested > 0:
-                        inv_msg = f"🚀 **Parabéns!** Você investiu **R$ {total_invested:,.2f}** neste período. Isso é construção de patrimônio, não gasto!"
+                        investment_ratio = (total_invested / balance) * 100 if balance > 0 else 0
+                        inv_msg = f"🚀 **Parabéns!** Você destinou **R$ {total_invested:,.2f}** para investimentos."
+                        if liquid_balance < 0:
+                             inv_msg += " ⚠️ **Atenção:** Você investiu mais do que tinha em caixa (usou cheque especial ou saldo anterior)."
 
                     # Dynamic Text
                     with st.container(border=True):
                         st.markdown(f"### 🤖 Resumo do Analista")
                         st.markdown(f"**Receitas:** R$ {total_income:,.2f}")
-                        st.markdown(f"**Despesas Reais:** R$ {total_expense:,.2f}")
-                        st.markdown(f"**Investimentos:** R$ {total_invested:,.2f}")
+                        st.markdown(f"**Despesas:** R$ {total_expense:,.2f}")
+                        st.markdown(f"**Resultado Operacional:** R$ {balance:,.2f}")
                         
                         st.divider()
                         
@@ -2045,7 +2054,7 @@ def render_financial_view():
                     k1.metric("💰 Receitas", f"R$ {total_income:,.2f}", delta_color="normal")
                     k2.metric("💸 Despesas", f"R$ {total_expense:,.2f}", delta="-"+f"R$ {total_expense:,.2f}", delta_color="inverse")
                     k3.metric("📈 Investido", f"R$ {total_invested:,.2f}", delta=f"{(total_invested/total_income)*100:.1f}%" if total_income > 0 else "")
-                    k4.metric("⚖️ Saldo Final", f"R$ {balance:,.2f}", delta=f"{balance:,.2f}")
+                    k4.metric("⚖️ Superávit/Saldo", f"R$ {balance:,.2f}", delta=f"Em conta: R$ {liquid_balance:,.2f}")
 
                     # ─── CHARTS (Expenses) ───
                     if not category_totals.empty:
@@ -2055,13 +2064,24 @@ def render_financial_view():
                          c_chart, c_table = st.columns([2, 1])
                          
                          with c_chart:
-                            fig = px.bar(category_totals, x="Categoria", y=val_col, text_auto='.2s', color="Categoria", title="Gastos por Categoria (Exceto Investimentos)")
-                            fig.update_layout(showlegend=False, xaxis_title=None, yaxis_title="Valor (R$)")
+                            # Create Top 10 Expenses DataFrame
+                            top_expenses = df_expense.sort_values(by=val_col, ascending=True).head(10) # ascending=True because values are negative
+                            top_expenses[val_col] = top_expenses[val_col].abs() # Make positive for chart
+                            
+                            fig = px.bar(
+                                top_expenses, 
+                                x=desc_col, 
+                                y=val_col, 
+                                text_auto='.2s', 
+                                color="Categoria", 
+                                title="🏆 Top 10 Maiores Gastos (Itens Individuais)"
+                            )
+                            fig.update_layout(showlegend=True, xaxis_title=None, yaxis_title="Valor (R$)")
                             st.plotly_chart(fig, use_container_width=True)
                          
                          with c_table:
-                             st.write("**Top Categorias**")
-                             st.dataframe(category_totals.style.format({val_col: "R$ {:,.2f}"}), use_container_width=True, hide_index=True)
+                             st.write("**Maiores Gastos**")
+                             st.dataframe(top_expenses[[desc_col, val_col]].rename(columns={desc_col: "Item", val_col: "Valor"}).style.format({"Valor": "R$ {:,.2f}"}), use_container_width=True, hide_index=True)
 
                     # ─── DETAILED TABLES (TABS) ───
                     st.divider()
